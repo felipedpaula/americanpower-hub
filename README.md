@@ -3,7 +3,7 @@
 Sistema de gestão para escola de inglês American Power, dividido em 3 áreas independentes:
 
 - **Site Institucional** (Blade) - Home, sobre, cursos, contato
-- **CMS Administrativo** (React + Inertia) - Gestão de turmas, alunos e professores
+- **CMS Administrativo** (React + Inertia) - Gestão de turmas e usuários (alunos, professores e colaboradores)
 - **Portal do Aluno** (React + Inertia) - Área exclusiva do aluno
 
 ---
@@ -89,10 +89,14 @@ npm run dev
 app/
 ├── Http/
 │   ├── Controllers/
-│   │   └── Auth/
-│   │       └── LoginController.php      # Autenticação CMS
+│   │   ├── Auth/
+│   │   │   └── LoginController.php            # Autenticação CMS
+│   │   └── CMS/
+│   │       ├── TurmaController.php           # CRUD de turmas (root/admin)
+│   │       └── UsuarioController.php         # CRUD de usuários (alunos, profs, colaboradores)
 │   └── Middleware/
-│       └── CheckPermission.php          # Middleware de permissões (level >= 3)
+│       ├── CheckPermission.php               # Middleware de permissões (level >= 3)
+│       └── CheckAdminPermission.php          # Restringe módulos a root/admin (level >= 4)
 ├── Models/
 │   ├── User.php                         # Usuário (com user_type_id)
 │   ├── UserType.php                     # Tipos de usuários
@@ -133,8 +137,13 @@ resources/
 │   ├── app.jsx                          # Entry point Inertia
 │   ├── Pages/
 │   │   ├── Auth/
-│   │   │   └── Login.jsx                # Login CMS (shadcn/ui)
-│   │   └── Dashboard.jsx               # Dashboard CMS
+│   │   │   └── Login.jsx                      # Login CMS (shadcn/ui)
+│   │   ├── CMS/
+│   │   │   └── Usuarios/                     # Páginas do módulo de usuários
+│   │   │       ├── Index.jsx                 # Lista por categoria com estatísticas
+│   │   │       ├── Create.jsx                # Cadastro com seleção de perfil
+│   │   │       └── Edit.jsx                  # Edição com redefinição opcional de senha
+│   │   └── Dashboard.jsx                     # Dashboard CMS
 │   ├── components/
 │   │   └── ui/                          # Componentes shadcn/ui
 │   │       ├── button.jsx
@@ -153,6 +162,16 @@ Configurações:
 ├── postcss.config.js                    # @tailwindcss/postcss
 └── jsconfig.json                        # Alias @/* para imports
 ```
+
+---
+
+## 👥 Módulo de Usuários do CMS
+
+- **Acesso restrito:** protegido pelos middlewares `auth`, `check.permission` (nível ≥ 3) e `check.admin` (nível ≥ 4), permitindo apenas usuários root e admin gerenciarem alunos, professores e colaboradores.
+- **Listagem segmentada:** dashboard dedicado com estatísticas totais e filtragem por categoria (alunos, professores, colaboradores) para facilitar a visualização e manutenção.
+- **Ações rápidas:** criação, edição e exclusão diretamente da tabela com confirmações e atalhos para registrar novos perfis.
+- **Formulários guiados:** telas de criação e edição contam com validações, seleção do tipo de usuário e redefinição opcional de senha, além de cards laterais com orientações.
+- **Validação backend:** `UsuarioController` garante que apenas os tipos permitidos sejam manipulados e bloqueia tentativas de acesso a usuários fora do escopo do módulo.
 
 ---
 
@@ -211,6 +230,11 @@ Configurações:
 - Valida `permission_level >= 3` (professor, admin, root)
 - Redireciona não autorizados para login
 
+### Middleware `CheckAdminPermission`
+- Reforça a checagem para `permission_level >= 4`
+- Bloqueia módulos administrativos sensíveis (turmas e usuários) para perfis abaixo de admin
+- Em caso de bloqueio, retorna HTTP 403 com mensagem de acesso negado
+
 ### Rotas Protegidas
 ```php
 // Acesso público
@@ -224,6 +248,12 @@ POST /cms/login → Processa login
 // CMS - Área protegida (permission_level >= 3)
 GET /cms/dashboard → Dashboard
 POST /cms/logout → Logout
+
+// CMS - Recursos restritos a root/admin (permission_level >= 4)
+Route::middleware('check.admin')->group(function () {
+    Route::resource('turmas', TurmaController::class);
+    Route::resource('usuarios', UsuarioController::class)->except(['show']);
+});
 ```
 
 ---
