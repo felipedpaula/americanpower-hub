@@ -6,8 +6,10 @@ import { cn } from '@/lib/utils';
 
 export default function CMSLayout({ children }) {
     const { post } = useForm();
-    const { url } = usePage();
+    const { url, props } = usePage();
     const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    const permissionLevel = props.auth?.user?.user_type?.permission_level ?? 0;
 
     const logout = (e) => {
         e.preventDefault();
@@ -16,8 +18,8 @@ export default function CMSLayout({ children }) {
 
     const navigation = [
         { name: 'Dashboard', href: '/cms/dashboard', icon: '📊' },
-        { name: 'Turmas', href: '/cms/turmas', icon: '🎓' },
-        { name: 'Usuários', href: '/cms/usuarios', icon: '👥', disabled: true },
+        { name: 'Turmas', href: '/cms/turmas', icon: '🎓', requiredPermission: 4 },
+        { name: 'Usuários', href: '/cms/usuarios', icon: '👥', requiredPermission: 4 },
         { name: 'Relatórios', href: '/cms/relatorios', icon: '📈', disabled: true },
     ];
 
@@ -51,43 +53,54 @@ export default function CMSLayout({ children }) {
 
                     {/* Navigation */}
                     <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-                        {navigation.map((item) => (
-                            <Link
-                                key={item.name}
-                                href={item.href}
-                                disabled={item.disabled}
-                                className={cn(
-                                    "flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
-                                    isActive(item.href)
-                                        ? "bg-primary text-primary-foreground"
-                                        : item.disabled
-                                        ? "text-gray-400 cursor-not-allowed"
-                                        : "text-gray-700 hover:bg-gray-100"
-                                )}
-                            >
-                                <span className="text-lg">{item.icon}</span>
-                                <span>{item.name}</span>
-                                {item.disabled && (
-                                    <span className="ml-auto text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
-                                        Em breve
-                                    </span>
-                                )}
-                            </Link>
-                        ))}
+                        {navigation.map((item) => {
+                            const isRestricted = item.requiredPermission && permissionLevel < item.requiredPermission;
+                            const disabled = item.disabled || isRestricted;
+
+                            return (
+                                <Link
+                                    key={item.name}
+                                    href={disabled ? '#' : item.href}
+                                    onClick={disabled ? (e) => e.preventDefault() : undefined}
+                                    className={cn(
+                                        "flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                                        isActive(item.href)
+                                            ? "bg-primary text-primary-foreground"
+                                            : disabled
+                                            ? "text-gray-400 cursor-not-allowed"
+                                            : "text-gray-700 hover:bg-gray-100"
+                                    )}
+                                    aria-disabled={disabled}
+                                >
+                                    <span className="text-lg">{item.icon}</span>
+                                    <span>{item.name}</span>
+                                    {item.disabled && (
+                                        <span className="ml-auto text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
+                                            Em breve
+                                        </span>
+                                    )}
+                                    {isRestricted && !item.disabled && (
+                                        <span className="ml-auto text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
+                                            Restrito
+                                        </span>
+                                    )}
+                                </Link>
+                            );
+                        })}
                     </nav>
 
                     {/* User Section */}
                     <div className="p-4 border-t border-gray-200">
                         <div className="flex items-center space-x-3 mb-3">
                             <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
-                                {usePage().props.auth?.user?.name?.charAt(0) || 'U'}
+                                {props.auth?.user?.name?.charAt(0) || 'U'}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-gray-900 truncate">
-                                    {usePage().props.auth?.user?.name || 'Usuário'}
+                                    {props.auth?.user?.name || 'Usuário'}
                                 </p>
                                 <p className="text-xs text-gray-500 truncate">
-                                    {usePage().props.auth?.user?.email || ''}
+                                    {props.auth?.user?.email || ''}
                                 </p>
                             </div>
                         </div>
