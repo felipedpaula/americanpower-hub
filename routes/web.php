@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\CMS\TurmaController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -26,5 +27,10 @@ Route::prefix('cms')->name('cms.')->group(function () {
             return Inertia::render('Dashboard');
         })->name('dashboard');
         Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
+
+        // Turmas - Apenas Root e Admin (permission_level >= 4)
+        Route::middleware('check.admin')->group(function () {
+            Route::resource('turmas', TurmaController::class);
+        });
     });
 });

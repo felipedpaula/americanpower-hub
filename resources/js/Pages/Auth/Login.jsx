@@ -1,8 +1,12 @@
 // /** @jsxImportSource react */
 import { Head, useForm } from '@inertiajs/react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-export default function Login({ status, canResetPassword }) {
-    const { data, setData, post, processing, errors, reset } = useForm({
+export default function Login({ status }) {
+    const { data, setData, post, processing, errors } = useForm({
         email: '',
         password: '',
         remember: false,
@@ -10,88 +14,85 @@ export default function Login({ status, canResetPassword }) {
 
     const submit = (e) => {
         e.preventDefault();
-
-        post('/cms/login', {
-            onFinish: () => reset('password'),
-        });
+        post('/cms/login');
     };
 
     return (
         <>
-            <Head title="Log in" />
+            <Head title="Login - CMS" />
 
-            <div className="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100">
-                <div className="w-full sm:max-w-md mt-6 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
-                    <h2 className="text-2xl font-bold text-center mb-6">Login - CMS</h2>
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <Card className="w-full max-w-md">
+                    <CardHeader className="space-y-1">
+                        <CardTitle className="text-2xl font-bold">Login - CMS</CardTitle>
+                        <CardDescription>
+                            Digite seu email e senha para acessar o sistema
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {status && (
+                            <div className="mb-4 text-sm font-medium text-green-600">
+                                {status}
+                            </div>
+                        )}
 
-                    {status && <div className="mb-4 font-medium text-sm text-green-600">{status}</div>}
+                        <form onSubmit={submit} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="email">Email</Label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    name="email"
+                                    value={data.email}
+                                    autoComplete="username"
+                                    onChange={(e) => setData('email', e.target.value)}
+                                    placeholder="seu@email.com"
+                                />
+                                {errors.email && (
+                                    <p className="text-sm text-red-600">{errors.email}</p>
+                                )}
+                            </div>
 
-                    <form onSubmit={submit}>
-                        <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                                Email
-                            </label>
-                            <input
-                                id="email"
-                                type="email"
-                                name="email"
-                                value={data.email}
-                                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                autoComplete="username"
-                                onChange={(e) => setData('email', e.target.value)}
-                            />
-                            {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
-                        </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="password">Senha</Label>
+                                <Input
+                                    id="password"
+                                    type="password"
+                                    name="password"
+                                    value={data.password}
+                                    autoComplete="current-password"
+                                    onChange={(e) => setData('password', e.target.value)}
+                                    placeholder="••••••••"
+                                />
+                                {errors.password && (
+                                    <p className="text-sm text-red-600">{errors.password}</p>
+                                )}
+                            </div>
 
-                        <div className="mt-4">
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                                Password
-                            </label>
-                            <input
-                                id="password"
-                                type="password"
-                                name="password"
-                                value={data.password}
-                                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                                autoComplete="current-password"
-                                onChange={(e) => setData('password', e.target.value)}
-                            />
-                            {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
-                        </div>
-
-                        <div className="block mt-4">
-                            <label className="flex items-center">
+                            <div className="flex items-center space-x-2">
                                 <input
                                     type="checkbox"
+                                    id="remember"
                                     name="remember"
                                     checked={data.remember}
                                     onChange={(e) => setData('remember', e.target.checked)}
-                                    className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                    className="rounded border-gray-300"
                                 />
-                                <span className="ml-2 text-sm text-gray-600">Remember me</span>
-                            </label>
-                        </div>
+                                <Label htmlFor="remember" className="font-normal cursor-pointer">
+                                    Lembrar-me
+                                </Label>
+                            </div>
 
-                        <div className="flex items-center justify-end mt-4">
-                            {canResetPassword && (
-                                <a
-                                    className="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                    href="/forgot-password"
-                                >
-                                    Forgot your password?
-                                </a>
-                            )}
-
-                            <button
+                            <Button
                                 type="submit"
-                                className="ml-3 inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                className="w-full"
                                 disabled={processing}
                             >
-                                Log in
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                                {processing ? 'Entrando...' : 'Entrar'}
+                            </Button>
+                        </form>
+                    </CardContent>
+                </Card>
             </div>
         </>
     );
