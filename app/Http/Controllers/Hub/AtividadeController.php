@@ -120,13 +120,20 @@ class AtividadeController extends Controller
             $turma = TurmaCriada::findOrFail($validated['turma_id']);
             $alunos = $turma->alunos ?? [];
             
+            $atividadesAlunoData = [];
             foreach ($alunos as $alunoId) {
-                AtividadeAluno::create([
+                $atividadesAlunoData[] = [
                     'atividade_id' => $atividade->id,
-                    'aluno_id' => $alunoId,
+                    'aluno_id' => (int)$alunoId,
                     'status' => 'pendente',
                     'nota_total' => 0,
-                ]);
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            if (!empty($atividadesAlunoData)) {
+                AtividadeAluno::insert($atividadesAlunoData);
             }
 
             DB::commit();
@@ -288,6 +295,7 @@ class AtividadeController extends Controller
             'valor' => 'required|numeric|min:0|max:999999.99',
         ]);
 
+        DB::beginTransaction();
         try {
             $questao = QuestaoAtividade::create([
                 'atividade_id' => $id,
@@ -296,16 +304,25 @@ class AtividadeController extends Controller
                 'status' => 'ativa',
             ]);
 
-            // Criar registros vazios para todos os alunos
+            // Criar registros vazios para todos os alunos usando batch insert
             $alunoIds = AtividadeAluno::where('atividade_id', $id)->pluck('aluno_id');
+            $respostasData = [];
             foreach ($alunoIds as $alunoId) {
-                QuestaoAtividadeAluno::create([
+                $respostasData[] = [
                     'questao_id' => $questao->id,
-                    'aluno_id' => $alunoId,
+                    'aluno_id' => (int)$alunoId,
                     'status' => 'em_branco',
                     'nota_obtida' => 0,
-                ]);
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
             }
+
+            if (!empty($respostasData)) {
+                QuestaoAtividadeAluno::insert($respostasData);
+            }
+
+            DB::commit();
 
             return back()->with('success', 'Questão adicionada com sucesso!');
         } catch (\Exception $e) {
