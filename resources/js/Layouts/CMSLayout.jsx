@@ -1,13 +1,15 @@
 /** @jsxImportSource react */
-import { useState } from 'react';
 import { Link, useForm, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useResponsiveSidebar } from '@/hooks/useResponsive';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function CMSLayout({ children }) {
     const { post } = useForm();
     const { url, props } = usePage();
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const { sidebarOpen, setSidebarOpen, isMobile, toggleSidebar } = useResponsiveSidebar();
+    const { theme, toggleTheme } = useTheme();
 
     const permissionLevel = props.auth?.user?.user_type?.permission_level ?? 0;
 
@@ -31,24 +33,54 @@ export default function CMSLayout({ children }) {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-background dark:bg-background">
+            {/* Overlay Mobile */}
+            {sidebarOpen && isMobile && (
+                <div
+                    className="fixed inset-0 bg-black/20 z-30"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
             <aside
                 className={cn(
-                    "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 ease-in-out",
+                    "fixed inset-y-0 left-0 z-50 w-64 bg-card dark:bg-card border-r border-border dark:border-border shadow-md transform transition-smooth",
                     sidebarOpen ? "translate-x-0" : "-translate-x-full"
                 )}
             >
                 <div className="flex flex-col h-full">
-                    {/* Logo */}
-                    <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
+                    {/* Logo Header */}
+                    <div className="flex items-center justify-between h-16 px-6 border-b border-border dark:border-border">
                         <Link href="/cms/dashboard" className="flex items-center space-x-2">
                             <span className="text-2xl">🇺🇸</span>
                             <div className="flex flex-col">
-                                <span className="text-sm font-bold text-gray-900">American Power</span>
-                                <span className="text-xs text-gray-500">CMS</span>
+                                <span className="text-sm font-bold text-foreground dark:text-foreground">American Power</span>
+                                <span className="text-xs text-muted-foreground dark:text-muted-foreground">CMS</span>
                             </div>
                         </Link>
+                        {/* Close Button Mobile */}
+                        <button
+                            onClick={() => setSidebarOpen(false)}
+                            className={cn(
+                                "p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary dark:hover:bg-secondary transition-smooth",
+                                isMobile ? "block" : "hidden"
+                            )}
+                        >
+                            <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M6 18L18 6M6 6l12 12"
+                                />
+                            </svg>
+                        </button>
                     </div>
 
                     {/* Navigation */}
@@ -67,20 +99,20 @@ export default function CMSLayout({ children }) {
                                         isActive(item.href)
                                             ? "bg-primary text-primary-foreground"
                                             : disabled
-                                            ? "text-gray-400 cursor-not-allowed"
-                                            : "text-gray-700 hover:bg-gray-100"
+                                            ? "text-muted-foreground cursor-not-allowed"
+                                            : "text-foreground hover:bg-secondary dark:hover:bg-secondary"
                                     )}
                                     aria-disabled={disabled}
                                 >
                                     <span className="text-lg">{item.icon}</span>
                                     <span>{item.name}</span>
                                     {item.disabled && (
-                                        <span className="ml-auto text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
+                                        <span className="ml-auto text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded">
                                             Em breve
                                         </span>
                                     )}
                                     {isRestricted && !item.disabled && (
-                                        <span className="ml-auto text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
+                                        <span className="ml-auto text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded">
                                             Restrito
                                         </span>
                                     )}
@@ -90,16 +122,16 @@ export default function CMSLayout({ children }) {
                     </nav>
 
                     {/* User Section */}
-                    <div className="p-4 border-t border-gray-200">
+                    <div className="p-4 border-t border-border dark:border-border transition-smooth">
                         <div className="flex items-center space-x-3 mb-3">
-                            <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
+                            <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shadow-sm">
                                 {props.auth?.user?.name?.charAt(0) || 'U'}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">
+                                <p className="text-sm font-medium text-foreground truncate">
                                     {props.auth?.user?.name || 'Usuário'}
                                 </p>
-                                <p className="text-xs text-gray-500 truncate">
+                                <p className="text-xs text-muted-foreground truncate">
                                     {props.auth?.user?.email || ''}
                                 </p>
                             </div>
@@ -117,15 +149,15 @@ export default function CMSLayout({ children }) {
             <div
                 className={cn(
                     "transition-all duration-200 ease-in-out",
-                    sidebarOpen ? "ml-64" : "ml-0"
+                    !isMobile && sidebarOpen ? "md:ml-64" : "ml-0"
                 )}
             >
                 {/* Top Header */}
-                <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+                <header className="sticky top-0 z-40 bg-card dark:bg-card border-b border-border dark:border-border shadow-sm transition-smooth">
                     <div className="flex items-center justify-between h-16 px-6">
                         <button
-                            onClick={() => setSidebarOpen(!sidebarOpen)}
-                            className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                            onClick={toggleSidebar}
+                            className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary dark:hover:bg-secondary transition-smooth"
                         >
                             <svg
                                 className="w-6 h-6"
@@ -143,6 +175,14 @@ export default function CMSLayout({ children }) {
                         </button>
 
                         <div className="flex items-center space-x-4">
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={toggleTheme}
+                                title={`Alternar para tema ${theme === 'dark' ? 'claro' : 'escuro'}`}
+                            >
+                                {theme === 'dark' ? '☀️' : '🌙'}
+                            </Button>
                             <Button variant="outline" size="sm" asChild>
                                 <a href="/" target="_blank">
                                     🌐 Ver Site

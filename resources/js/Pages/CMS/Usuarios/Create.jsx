@@ -3,7 +3,6 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import CMSLayout from '@/Layouts/CMSLayout';
 
@@ -25,12 +24,13 @@ export default function Create({ userTypes }) {
         <CMSLayout>
             <Head title="Novo Usuário - CMS" />
 
-            <div className="space-y-6">
+                        <div className="space-y-6 animate-fadeIn">
+                {/* Page Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Novo Usuário</h1>
-                        <p className="mt-1 text-sm text-gray-500">
-                            Cadastre alunos, professores ou colaboradores para o CMS
+                        <h1 className="text-3xl font-bold text-foreground dark:text-foreground">Novo Usuário</h1>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Cadastre um novo usuário no sistema
                         </p>
                     </div>
                     <Link href="/cms/usuarios">
@@ -86,18 +86,19 @@ export default function Create({ userTypes }) {
                                         <Label htmlFor="user_type_id">
                                             Tipo de usuário <span className="text-red-500">*</span>
                                         </Label>
-                                        <Select
+                                        <select
                                             id="user_type_id"
                                             value={data.user_type_id}
                                             onChange={(e) => setData('user_type_id', e.target.value)}
-                                            className={errors.user_type_id ? 'border-red-500' : ''}
+                                            className={`flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${errors.user_type_id ? 'border-red-500' : ''}`}
                                         >
+                                            <option value="">Selecione um tipo</option>
                                             {userTypes.map((type) => (
                                                 <option key={type.id} value={type.id}>
                                                     {type.label}
                                                 </option>
                                             ))}
-                                        </Select>
+                                        </select>
                                         {errors.user_type_id && (
                                             <p className="text-sm text-red-600">{errors.user_type_id}</p>
                                         )}

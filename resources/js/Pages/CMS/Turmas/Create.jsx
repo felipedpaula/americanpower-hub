@@ -2,11 +2,10 @@
 import { Head, useForm, Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import CMSLayout from '@/Layouts/CMSLayout';
 
-export default function Create({ turmas, professores, alunos }) {
+export default function Create({ turmas, professores, alunos, totalAlunosAlocados }) {
     const { data, setData, post, processing, errors } = useForm({
         turma_id: '',
         professor_id: '',
@@ -31,12 +30,12 @@ export default function Create({ turmas, professores, alunos }) {
         <CMSLayout>
             <Head title="Nova Turma - CMS" />
 
-            <div className="space-y-6">
+            <div className="space-y-6 animate-fadeIn">
                 {/* Page Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Nova Turma</h1>
-                        <p className="mt-1 text-sm text-gray-500">
+                        <h1 className="text-3xl font-bold text-foreground dark:text-foreground">Nova Turma</h1>
+                        <p className="mt-1 text-sm text-muted-foreground">
                             Preencha os dados para criar uma nova turma
                         </p>
                     </div>
@@ -64,11 +63,11 @@ export default function Create({ turmas, professores, alunos }) {
                                         <Label htmlFor="turma_id">
                                             Turma <span className="text-red-500">*</span>
                                         </Label>
-                                        <Select
+                                        <select
                                             id="turma_id"
                                             value={data.turma_id}
                                             onChange={(e) => setData('turma_id', e.target.value)}
-                                            className={errors.turma_id ? 'border-red-500' : ''}
+                                            className={`flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${errors.turma_id ? 'border-red-500' : ''}`}
                                         >
                                             <option value="">Selecione...</option>
                                             {turmas.map((turma) => (
@@ -76,7 +75,7 @@ export default function Create({ turmas, professores, alunos }) {
                                                     {turma.nome}
                                                 </option>
                                             ))}
-                                        </Select>
+                                        </select>
                                         {errors.turma_id && (
                                             <p className="text-sm text-red-600">{errors.turma_id}</p>
                                         )}
@@ -86,11 +85,11 @@ export default function Create({ turmas, professores, alunos }) {
                                         <Label htmlFor="professor_id">
                                             Professor <span className="text-red-500">*</span>
                                         </Label>
-                                        <Select
+                                        <select
                                             id="professor_id"
                                             value={data.professor_id}
                                             onChange={(e) => setData('professor_id', e.target.value)}
-                                            className={errors.professor_id ? 'border-red-500' : ''}
+                                            className={`flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${errors.professor_id ? 'border-red-500' : ''}`}
                                         >
                                             <option value="">Selecione...</option>
                                             {professores.map((professor) => (
@@ -98,7 +97,7 @@ export default function Create({ turmas, professores, alunos }) {
                                                     {professor.name}
                                                 </option>
                                             ))}
-                                        </Select>
+                                        </select>
                                         {errors.professor_id && (
                                             <p className="text-sm text-red-600">{errors.professor_id}</p>
                                         )}
@@ -109,16 +108,16 @@ export default function Create({ turmas, professores, alunos }) {
                                     <Label htmlFor="status">
                                         Status <span className="text-red-500">*</span>
                                     </Label>
-                                    <Select
+                                    <select
                                         id="status"
                                         value={data.status}
                                         onChange={(e) => setData('status', e.target.value)}
-                                        className={errors.status ? 'border-red-500' : ''}
+                                        className={`flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${errors.status ? 'border-red-500' : ''}`}
                                     >
                                         <option value="em andamento">✅ Em andamento</option>
                                         <option value="bloqueada">⚠️ Bloqueada</option>
                                         <option value="encerrada">🔒 Encerrada</option>
-                                    </Select>
+                                    </select>
                                     {errors.status && (
                                         <p className="text-sm text-red-600">{errors.status}</p>
                                     )}
@@ -133,7 +132,7 @@ export default function Create({ turmas, professores, alunos }) {
                                     Selecione os alunos que farão parte desta turma
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
+                                                        <CardContent>
                                 {alunos.length === 0 ? (
                                     <div className="text-center py-8">
                                         <span className="text-4xl block mb-2">👨‍🎓</span>
@@ -142,30 +141,37 @@ export default function Create({ turmas, professores, alunos }) {
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto p-1">
-                                        {alunos.map((aluno) => (
-                                            <label
-                                                key={aluno.id}
-                                                className={`flex items-center space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                                                    data.alunos.includes(aluno.id)
-                                                        ? 'border-primary bg-primary/5'
-                                                        : 'border-gray-200 hover:border-gray-300'
-                                                }`}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={data.alunos.includes(aluno.id)}
-                                                    onChange={() => toggleAluno(aluno.id)}
-                                                    className="rounded border-gray-300"
-                                                />
-                                                <div className="flex items-center space-x-2 flex-1">
-                                                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
-                                                        {aluno.name.charAt(0)}
+                                    <div>
+                                        {totalAlunosAlocados > 0 && (
+                                            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                                                ℹ️ {totalAlunosAlocados} aluno(s) já alocado(s) em outras turmas
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto p-1">
+                                            {alunos.map((aluno) => (
+                                                <label
+                                                    key={aluno.id}
+                                                    className={`flex items-center space-x-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                                                        data.alunos.includes(aluno.id)
+                                                            ? 'border-primary bg-primary/5'
+                                                            : 'border-gray-200 hover:border-gray-300'
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={data.alunos.includes(aluno.id)}
+                                                        onChange={() => toggleAluno(aluno.id)}
+                                                        className="rounded border-gray-300"
+                                                    />
+                                                    <div className="flex items-center space-x-2 flex-1">
+                                                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                                                            {aluno.name.charAt(0)}
+                                                        </div>
+                                                        <span className="text-sm font-medium">{aluno.name}</span>
                                                     </div>
-                                                    <span className="text-sm font-medium">{aluno.name}</span>
-                                                </div>
-                                            </label>
-                                        ))}
+                                                </label>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                                 {errors.alunos && (

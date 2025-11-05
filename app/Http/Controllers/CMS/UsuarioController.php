@@ -27,23 +27,29 @@ class UsuarioController extends Controller
             ->get();
 
         $usuariosFormatados = [
-            'alunos' => $this->formatUsersByType($usuarios, 'aluno'),
+            'root' => $this->formatUsersByType($usuarios, 'root'),
+            'admins' => $this->formatUsersByType($usuarios, 'admin'),
             'professores' => $this->formatUsersByType($usuarios, 'professor'),
             'colaboradores' => $this->formatUsersByType($usuarios, 'colaborador'),
+            'alunos' => $this->formatUsersByType($usuarios, 'aluno'),
         ];
 
         $stats = [
             'total' => $usuarios->count(),
-            'alunos' => $usuariosFormatados['alunos']['total'],
+            'root' => $usuariosFormatados['root']['total'],
+            'admins' => $usuariosFormatados['admins']['total'],
             'professores' => $usuariosFormatados['professores']['total'],
             'colaboradores' => $usuariosFormatados['colaboradores']['total'],
+            'alunos' => $usuariosFormatados['alunos']['total'],
         ];
 
         return Inertia::render('CMS/Usuarios/Index', [
             'usuarios' => [
-                'alunos' => $usuariosFormatados['alunos']['usuarios'],
+                'root' => $usuariosFormatados['root']['usuarios'],
+                'admins' => $usuariosFormatados['admins']['usuarios'],
                 'professores' => $usuariosFormatados['professores']['usuarios'],
                 'colaboradores' => $usuariosFormatados['colaboradores']['usuarios'],
+                'alunos' => $usuariosFormatados['alunos']['usuarios'],
             ],
             'stats' => $stats,
         ]);
@@ -155,6 +161,21 @@ class UsuarioController extends Controller
 
     private function getAllowedUserTypes()
     {
+        $user = auth()->user();
+
+        // Root (level 5) pode gerenciar todos os tipos
+        if ($user->userType->permission_level >= 5) {
+            return UserType::orderBy('permission_level', 'desc')->get();
+        }
+
+        // Admin (level 4) pode gerenciar todos os tipos exceto root
+        if ($user->userType->permission_level >= 4) {
+            return UserType::where('name', '!=', 'root')
+                ->orderBy('permission_level', 'desc')
+                ->get();
+        }
+
+        // Outros usuários só podem gerenciar alunos, professores e colaboradores
         return UserType::whereIn('name', ['aluno', 'professor', 'colaborador'])
             ->orderBy('permission_level', 'desc')
             ->get();
@@ -163,9 +184,11 @@ class UsuarioController extends Controller
     private function getTypeLabel(string $typeName): string
     {
         return match ($typeName) {
-            'aluno' => 'Aluno',
+            'root' => 'Root',
+            'admin' => 'Administrador',
             'professor' => 'Professor',
             'colaborador' => 'Colaborador',
+            'aluno' => 'Aluno',
             default => ucfirst($typeName),
         };
     }
@@ -193,10 +216,23 @@ class UsuarioController extends Controller
 
     private function ensureAllowedUser(User $usuario): void
     {
-        $allowedTypeIds = $this->getAllowedUserTypes()->pluck('id');
+        $currentUser = auth()->user();
+
+        // Root pode gerenciar todos
+        if ($currentUser->userType->permission_level >= 5) {
+            return;
+        }
+
+        // Admin pode gerenciar todos exceto root
+        if ($currentUser->userType->permission_level >= 4 && $usuario->userType->name !== 'root') {
+            return;
+        }
+
+        // Outros usuários só podem gerenciar alunos, professores e colaboradores
+        $allowedTypeIds = UserType::whereIn('name', ['aluno', 'professor', 'colaborador'])->pluck('id');
 
         if (!$allowedTypeIds->contains($usuario->user_type_id)) {
-            abort(403, 'Apenas alunos, professores e colaboradores podem ser gerenciados por este módulo.');
+            abort(403, 'Você não tem permissão para gerenciar este tipo de usuário.');
         }
     }
 }

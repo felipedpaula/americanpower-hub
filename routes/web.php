@@ -15,7 +15,14 @@ Route::get('/', function () {
 Route::prefix('cms')->name('cms.')->group(function () {
     Route::get('/', function () {
         if (auth()->check()) {
-            return redirect()->route('cms.dashboard');
+            // Verifica se o usuário tem permissão para acessar o CMS
+            if (auth()->user()->userType->permission_level >= 4) {
+                return redirect()->route('cms.dashboard');
+            } else {
+                // Usuário logado mas sem permissão - fazer logout
+                auth()->logout();
+                return redirect()->route('cms.login')->with('error', 'Você não tem permissão para acessar o CMS.');
+            }
         }
         return redirect()->route('cms.login');
     })->name('index');
@@ -23,7 +30,7 @@ Route::prefix('cms')->name('cms.')->group(function () {
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login')->middleware('guest');
     Route::post('/login', [LoginController::class, 'login'])->name('login.store')->middleware('guest');
 
-    Route::middleware(['auth', 'check.permission'])->group(function () {
+    Route::middleware(['auth', 'check.admin'])->group(function () {
         Route::get('/dashboard', function () {
             return Inertia::render('Dashboard');
         })->name('dashboard');

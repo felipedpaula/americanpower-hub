@@ -11,7 +11,7 @@ export default function Dashboard() {
             description: 'Gerencie turmas, professores e alunos matriculados.',
             icon: '🎓',
             href: '/cms/turmas',
-            color: 'bg-blue-50 text-blue-700',
+            color: 'bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400',
             disabled: false,
         },
         {
@@ -19,7 +19,7 @@ export default function Dashboard() {
             description: 'Adicione e gerencie usuários do sistema.',
             icon: '👥',
             href: '/cms/usuarios',
-            color: 'bg-green-50 text-green-700',
+            color: 'bg-green-500/10 text-green-600 dark:bg-green-500/20 dark:text-green-400',
             disabled: true,
         },
         {
@@ -27,7 +27,7 @@ export default function Dashboard() {
             description: 'Visualize estatísticas e relatórios de desempenho.',
             icon: '📈',
             href: '/cms/relatorios',
-            color: 'bg-purple-50 text-purple-700',
+            color: 'bg-purple-500/10 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400',
             disabled: true,
         },
         {
@@ -35,7 +35,7 @@ export default function Dashboard() {
             description: 'Configure preferências do sistema e perfil.',
             icon: '⚙️',
             href: '/cms/configuracoes',
-            color: 'bg-gray-50 text-gray-700',
+            color: 'bg-gray-500/10 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
             disabled: true,
         },
     ];
@@ -44,15 +44,15 @@ export default function Dashboard() {
         <CMSLayout>
             <Head title="Dashboard - CMS" />
 
-            <div className="space-y-6">
+            <div className="space-y-6 animate-fadeIn">
                 {/* Welcome Section */}
-                <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-lg p-8 text-white">
+                <div className="bg-gradient-to-r from-primary to-primary/80 rounded-lg shadow-lg p-8 text-primary-foreground">
                     <div className="flex items-center justify-between">
                         <div>
                             <h1 className="text-3xl font-bold mb-2">
                                 Bem-vindo ao CMS! 👋
                             </h1>
-                            <p className="text-blue-100">
+                            <p className="text-primary-foreground/80">
                                 Gerencie sua escola de inglês de forma simples e eficiente
                             </p>
                         </div>
@@ -111,12 +111,12 @@ export default function Dashboard() {
 
                 {/* Quick Actions */}
                 <div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">Ações Rápidas</h2>
+                    <h2 className="text-xl font-bold text-foreground dark:text-foreground mb-4">Ações Rápidas</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {quickActions.map((action) => (
                             <Card
                                 key={action.title}
-                                className={action.disabled ? 'opacity-60' : 'hover:shadow-lg transition-shadow'}
+                                className={action.disabled ? 'opacity-60' : 'hover:shadow-lg transition-smooth'}
                             >
                                 <CardHeader>
                                     <div className={`w-12 h-12 rounded-lg ${action.color} flex items-center justify-center text-2xl mb-3`}>
