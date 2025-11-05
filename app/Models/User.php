@@ -48,4 +48,14 @@ class User extends Authenticatable
     {
         return $this->belongsTo(UserType::class);
     }
+
+    public function atividadesAluno()
+    {
+        return $this->hasMany(AtividadeAluno::class, 'aluno_id');
+    }
+
+    public function respostasQuestoes()
+    {
+        return $this->hasMany(QuestaoAtividadeAluno::class, 'aluno_id');
+    }
 }
