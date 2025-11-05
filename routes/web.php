@@ -4,6 +4,7 @@ use App\Http\Controllers\CMS\AuthController as CMSAuthController;
 use App\Http\Controllers\CMS\SettingController;
 use App\Http\Controllers\CMS\TurmaController;
 use App\Http\Controllers\CMS\UsuarioController;
+use App\Http\Controllers\Hub\AtividadeController;
 use App\Http\Controllers\Hub\AuthController as HubAuthController;
 use App\Http\Controllers\Hub\HubController;
 use Illuminate\Support\Facades\Route;
@@ -75,5 +76,38 @@ Route::prefix('hub')->name('hub.')->group(function () {
         Route::get('/dashboard', [HubController::class, 'dashboard'])->name('dashboard');
         Route::post('/logout', [HubAuthController::class, 'logout'])->name('logout');
         Route::get('/resources', [HubController::class, 'getAvailableResources'])->name('resources');
+
+        // Rotas de Atividades
+        Route::prefix('atividades')->name('atividades.')->group(function () {
+            // Rotas acessíveis por todos os usuários autenticados do hub
+            Route::get('/', [AtividadeController::class, 'index'])->name('index');
+
+            // Rotas para criação e edição (professores, admin, root)
+            Route::middleware('check.permission')->group(function () {
+                Route::get('/create', [AtividadeController::class, 'create'])->name('create');
+                Route::post('/', [AtividadeController::class, 'store'])->name('store');
+                Route::get('/{id}/edit', [AtividadeController::class, 'edit'])->name('edit');
+                Route::put('/{id}', [AtividadeController::class, 'update'])->name('update');
+                Route::delete('/{id}', [AtividadeController::class, 'destroy'])->name('destroy');
+
+                // Gestão de questões
+                Route::post('/{id}/questoes', [AtividadeController::class, 'addQuestao'])->name('questoes.store');
+                Route::put('/{id}/questoes/{questaoId}', [AtividadeController::class, 'updateQuestao'])->name('questoes.update');
+                Route::delete('/{id}/questoes/{questaoId}', [AtividadeController::class, 'destroyQuestao'])->name('questoes.destroy');
+
+                // Correção
+                Route::get('/{id}/submissoes', [AtividadeController::class, 'submissoes'])->name('submissoes');
+                Route::get('/{id}/submissoes/{alunoId}', [AtividadeController::class, 'visualizarSubmissao'])->name('submissoes.show');
+                Route::put('/{id}/submissoes/{alunoId}/questoes/{questaoId}', [AtividadeController::class, 'corrigirQuestao'])->name('submissoes.corrigir');
+                Route::post('/{id}/submissoes/{alunoId}/finalizar', [AtividadeController::class, 'finalizarCorrecao'])->name('submissoes.finalizar');
+            });
+
+            // Rotas gerais (precisam estar depois de rotas específicas)
+            Route::get('/{id}', [AtividadeController::class, 'show'])->name('show');
+
+            // Rotas para alunos
+            Route::post('/{id}/questoes/{questaoId}/responder', [AtividadeController::class, 'responderQuestao'])->name('questoes.responder');
+            Route::post('/{id}/submeter', [AtividadeController::class, 'submeter'])->name('submeter');
+        });
     });
 });
