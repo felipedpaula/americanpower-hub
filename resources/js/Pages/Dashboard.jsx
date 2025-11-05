@@ -46,21 +46,23 @@ export default function Dashboard() {
 
             <div className="space-y-6 animate-fadeIn">
                 {/* Welcome Section */}
-                <div className="bg-gradient-to-r from-primary to-primary/80 rounded-lg shadow-lg p-8 text-primary-foreground">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold mb-2">
-                                Bem-vindo ao CMS! 👋
-                            </h1>
-                            <p className="text-primary-foreground/80">
-                                Gerencie sua escola de inglês de forma simples e eficiente
-                            </p>
-                        </div>
-                        <div className="hidden md:block text-6xl">
-                            🇺🇸
+                <Card className="overflow-hidden border-0 shadow-lg">
+                    <div className="bg-gradient-to-r bg-primary p-8 text-white">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h1 className="text-3xl font-bold mb-2">
+                                    Bem-vindo ao CMS! 👋
+                                </h1>
+                                <p className="text-blue-50">
+                                    Gerencie sua escola de inglês de forma simples e eficiente
+                                </p>
+                            </div>
+                            <div className="hidden md:block text-6xl">
+                                🇺🇸
+                            </div>
                         </div>
                     </div>
-                </div>
+                </Card>
 
                 {/* Quick Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

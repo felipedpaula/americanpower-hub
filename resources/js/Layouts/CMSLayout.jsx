@@ -3,13 +3,13 @@ import { Link, useForm, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useResponsiveSidebar } from '@/hooks/useResponsive';
-import { useTheme } from '@/hooks/useTheme';
+import { useCMSTheme } from '@/hooks/useTheme';
 
 export default function CMSLayout({ children }) {
     const { post } = useForm();
     const { url, props } = usePage();
     const { sidebarOpen, setSidebarOpen, isMobile, toggleSidebar } = useResponsiveSidebar();
-    const { theme, toggleTheme } = useTheme();
+    const { theme, toggleTheme } = useCMSTheme();
 
     const permissionLevel = props.auth?.user?.user_type?.permission_level ?? 0;
 
