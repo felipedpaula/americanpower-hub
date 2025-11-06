@@ -4,6 +4,28 @@ import HubLayout from '@/Layouts/HubLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
+const getAlunosCount = (alunosField) => {
+    if (!alunosField) {
+        return 0;
+    }
+
+    if (Array.isArray(alunosField)) {
+        return alunosField.length;
+    }
+
+    if (typeof alunosField === 'string') {
+        try {
+            const parsed = JSON.parse(alunosField);
+            return Array.isArray(parsed) ? parsed.length : 0;
+        } catch (error) {
+            console.warn('Não foi possível converter alunos para array:', alunosField);
+            return 0;
+        }
+    }
+
+    return 0;
+};
+
 export default function Dashboard({ user, stats, turmas }) {
     const renderDashboardByType = () => {
         switch (user.type) {
@@ -70,7 +92,7 @@ export default function Dashboard({ user, stats, turmas }) {
                                                             {turmaCriada.turma.nome}
                                                         </h3>
                                                         <p className="text-sm text-muted-foreground">
-                                                            {JSON.parse(turmaCriada.alunos || '[]').length} alunos
+                                                            {getAlunosCount(turmaCriada.alunos)} alunos
                                                         </p>
                                                     </div>
                                                     <Badge variant={
