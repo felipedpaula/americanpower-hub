@@ -279,6 +279,30 @@ class AtividadeController extends Controller
     }
 
     /**
+     * Exibe formulário para criação de questão
+     */
+    public function createQuestao($id)
+    {
+        $user = auth()->user();
+        $atividade = Atividade::with(['turma.turma'])->findOrFail($id);
+
+        if (!$atividade->canEdit($user)) {
+            abort(403, 'Você não tem permissão para adicionar questões a esta atividade.');
+        }
+
+        return Inertia::render('Hub/Atividades/Questoes/Create', [
+            'atividade' => [
+                'id' => $atividade->id,
+                'titulo' => $atividade->titulo,
+                'nota_max' => $atividade->nota_max,
+                'turma' => [
+                    'nome' => $atividade->turma->turma->nome ?? null,
+                ],
+            ],
+        ]);
+    }
+
+    /**
      * Adiciona uma questão à atividade
      */
     public function addQuestao(Request $request, $id)

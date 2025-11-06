@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 const inputClass = "mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring";
 
@@ -30,17 +30,38 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
 
     const questoes = useMemo(() => atividade?.questoes ?? [], [atividade?.questoes]);
 
+    const [editingQuestaoId, setEditingQuestaoId] = useState(null);
     const questaoForm = useForm({
         enunciado: '',
         valor: '',
+        status: 'ativa',
     });
 
-    const handleCreateQuestao = (event) => {
+    const startEditingQuestao = (questao) => {
+        setEditingQuestaoId(questao.id);
+        questaoForm.setData((data) => ({
+            ...data,
+            enunciado: questao.enunciado ?? '',
+            valor: questao.valor ?? '',
+            status: questao.status ?? 'ativa',
+        }));
+        questaoForm.clearErrors();
+    };
+
+    const cancelEditingQuestao = () => {
+        setEditingQuestaoId(null);
+        questaoForm.reset();
+        questaoForm.clearErrors();
+    };
+
+    const handleUpdateQuestao = (event) => {
         event.preventDefault();
-        questaoForm.post(`/hub/atividades/${atividade.id}/questoes`, {
+        if (!editingQuestaoId) return;
+
+        questaoForm.put(`/hub/atividades/${atividade.id}/questoes/${editingQuestaoId}`, {
             preserveScroll: true,
             onSuccess: () => {
-                questaoForm.reset();
+                cancelEditingQuestao();
             },
         });
     };
@@ -214,55 +235,15 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
                                     ? 'Gerencie o conteúdo que os alunos deverão responder'
                                     : 'Nenhuma questão cadastrada ainda'}
                             </CardDescription>
+                            {canManage && (
+                                <div className="mt-4 flex justify-end">
+                                    <Link href={`/hub/atividades/${atividade.id}/questoes/create`}>
+                                        <Button type="button">Adicionar questão</Button>
+                                    </Link>
+                                </div>
+                            )}
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            {canManage && (
-                                <form
-                                    onSubmit={handleCreateQuestao}
-                                    className="space-y-4 rounded-md border border-dashed border-border p-4"
-                                >
-                                    <div>
-                                        <Label htmlFor="enunciado">Enunciado</Label>
-                                        <textarea
-                                            id="enunciado"
-                                            value={questaoForm.data.enunciado}
-                                            onChange={(event) => questaoForm.setData('enunciado', event.target.value)}
-                                            placeholder="Digite o enunciado da questão"
-                                            className={`${inputClass} min-h-[120px] resize-y`}
-                                        />
-                                        {questaoForm.errors.enunciado && (
-                                            <p className="mt-2 text-sm text-destructive">
-                                                {questaoForm.errors.enunciado}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="max-w-xs">
-                                        <Label htmlFor="valor">Valor da questão</Label>
-                                        <Input
-                                            id="valor"
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={questaoForm.data.valor}
-                                            onChange={(event) => questaoForm.setData('valor', event.target.value)}
-                                            placeholder="Ex: 2"
-                                        />
-                                        {questaoForm.errors.valor && (
-                                            <p className="mt-2 text-sm text-destructive">
-                                                {questaoForm.errors.valor}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="flex justify-end">
-                                        <Button type="submit" disabled={questaoForm.processing}>
-                                            {questaoForm.processing ? 'Salvando...' : 'Adicionar questão'}
-                                        </Button>
-                                    </div>
-                                </form>
-                            )}
-
                             {questoes.length === 0 ? (
                                 <p className="text-sm text-muted-foreground">
                                     Assim que você adicionar questões, elas aparecerão aqui.
@@ -291,7 +272,99 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
                                                         {questao.enunciado}
                                                     </p>
                                                 </div>
+                                                {canManage && editingQuestaoId !== questao.id && (
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => startEditingQuestao(questao)}
+                                                        >
+                                                            Editar
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </div>
+                                            {canManage && editingQuestaoId === questao.id && (
+                                                <form
+                                                    onSubmit={handleUpdateQuestao}
+                                                    className="mt-4 space-y-4 rounded-md border border-dashed border-border p-4"
+                                                >
+                                                    <div>
+                                                        <Label htmlFor={`enunciado-${questao.id}`}>Enunciado</Label>
+                                                        <textarea
+                                                            id={`enunciado-${questao.id}`}
+                                                            value={questaoForm.data.enunciado}
+                                                            onChange={(event) =>
+                                                                questaoForm.setData('enunciado', event.target.value)
+                                                            }
+                                                            placeholder="Atualize o enunciado da questão"
+                                                            className={`${inputClass} min-h-[120px] resize-y`}
+                                                        />
+                                                        {questaoForm.errors.enunciado && (
+                                                            <p className="mt-2 text-sm text-destructive">
+                                                                {questaoForm.errors.enunciado}
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="grid gap-4 md:grid-cols-2">
+                                                        <div>
+                                                            <Label htmlFor={`valor-${questao.id}`}>Valor da questão</Label>
+                                                            <Input
+                                                                id={`valor-${questao.id}`}
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                value={questaoForm.data.valor}
+                                                                onChange={(event) =>
+                                                                    questaoForm.setData('valor', event.target.value)
+                                                                }
+                                                                placeholder="Ex: 2"
+                                                            />
+                                                            {questaoForm.errors.valor && (
+                                                                <p className="mt-2 text-sm text-destructive">
+                                                                    {questaoForm.errors.valor}
+                                                                </p>
+                                                            )}
+                                                        </div>
+
+                                                        <div>
+                                                            <Label htmlFor={`status-${questao.id}`}>Status</Label>
+                                                            <select
+                                                                id={`status-${questao.id}`}
+                                                                value={questaoForm.data.status}
+                                                                onChange={(event) =>
+                                                                    questaoForm.setData('status', event.target.value)
+                                                                }
+                                                                className={inputClass}
+                                                            >
+                                                                <option value="ativa">Ativa</option>
+                                                                <option value="anulada">Anulada</option>
+                                                            </select>
+                                                            {questaoForm.errors.status && (
+                                                                <p className="mt-2 text-sm text-destructive">
+                                                                    {questaoForm.errors.status}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            onClick={cancelEditingQuestao}
+                                                            disabled={questaoForm.processing}
+                                                        >
+                                                            Cancelar
+                                                        </Button>
+                                                        <Button type="submit" disabled={questaoForm.processing}>
+                                                            {questaoForm.processing ? 'Salvando...' : 'Salvar alterações'}
+                                                        </Button>
+                                                    </div>
+                                                </form>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
