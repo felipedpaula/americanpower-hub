@@ -47,6 +47,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('atividade_id')->constrained('atividade')->onDelete('cascade');
             $table->text('enunciado');
+            $table->text('resposta_esperada')->nullable();
             $table->string('status')->default('ativa');
             $table->unsignedDecimal('valor', 8, 2)->default(0);
             $table->timestamps();

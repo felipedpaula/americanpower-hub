@@ -16,6 +16,13 @@ export default function CreateAtividade({ turmas = [], tipos = [] }) {
         nota_max: '',
         data_entrega: '',
     });
+    const formatTurmaLabel = (turmaCriada) => {
+        const nomeTurma = turmaCriada.turma?.nome ?? `Turma #${turmaCriada.id}`;
+        if (turmaCriada.status === 'em andamento') {
+            return nomeTurma;
+        }
+        return `${nomeTurma} (${turmaCriada.status})`;
+    };
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -62,8 +69,17 @@ export default function CreateAtividade({ turmas = [], tipos = [] }) {
                             >
                                 <option value="">Selecione a turma</option>
                                 {turmas.map((turmaCriada) => (
-                                    <option key={turmaCriada.id} value={turmaCriada.id}>
-                                        {turmaCriada.turma?.nome ?? `Turma #${turmaCriada.id}`}
+                                    <option
+                                        key={turmaCriada.id}
+                                        value={turmaCriada.id}
+                                        disabled={turmaCriada.status !== 'em andamento'}
+                                        title={
+                                            turmaCriada.status !== 'em andamento'
+                                                ? 'Turmas bloqueadas ou encerradas não permitem novas atividades.'
+                                                : undefined
+                                        }
+                                    >
+                                        {formatTurmaLabel(turmaCriada)}
                                     </option>
                                 ))}
                             </select>

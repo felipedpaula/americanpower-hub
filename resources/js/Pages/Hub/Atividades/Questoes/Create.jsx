@@ -15,6 +15,7 @@ export default function CreateQuestao({ atividade }) {
     const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         enunciado: '',
         valor: '',
+        resposta_esperada: '',
     });
 
     const handleSubmit = (event) => {
@@ -91,7 +92,7 @@ export default function CreateQuestao({ atividade }) {
                 <Card>
                     <CardHeader>
                         <CardTitle>Informações da questão</CardTitle>
-                        <CardDescription>Defina o enunciado e o valor da questão.</CardDescription>
+                        <CardDescription>Defina o enunciado, a resposta esperada e o valor da questão.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-6">
@@ -106,6 +107,20 @@ export default function CreateQuestao({ atividade }) {
                                 />
                                 {errors.enunciado && (
                                     <p className="mt-2 text-sm text-destructive">{errors.enunciado}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="resposta_esperada">Resposta esperada (opcional)</Label>
+                                <textarea
+                                    id="resposta_esperada"
+                                    value={data.resposta_esperada}
+                                    onChange={(event) => setData('resposta_esperada', event.target.value)}
+                                    placeholder="Informe a resposta ideal para facilitar correções"
+                                    className={`${inputClass} min-h-[120px] resize-y`}
+                                />
+                                {errors.resposta_esperada && (
+                                    <p className="mt-2 text-sm text-destructive">{errors.resposta_esperada}</p>
                                 )}
                             </div>
 

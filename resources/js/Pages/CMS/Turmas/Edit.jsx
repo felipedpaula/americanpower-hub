@@ -5,12 +5,25 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import CMSLayout from '@/Layouts/CMSLayout';
 
+const diasSemanaOptions = [
+    { value: 'domingo', label: 'Dom' },
+    { value: 'segunda', label: 'Seg' },
+    { value: 'terca', label: 'Ter' },
+    { value: 'quarta', label: 'Qua' },
+    { value: 'quinta', label: 'Qui' },
+    { value: 'sexta', label: 'Sex' },
+    { value: 'sabado', label: 'Sáb' },
+];
+
 export default function Edit({ turmaCriada, turmas, professores, alunos, totalAlunosAlocados }) {
     const { data, setData, put, processing, errors } = useForm({
         turma_id: turmaCriada.turma_id,
         professor_id: turmaCriada.professor_id,
         alunos: turmaCriada.alunos || [],
         status: turmaCriada.status,
+        dias_semana: turmaCriada.dias_semana || [],
+        inicio: turmaCriada.inicio || '',
+        fim: turmaCriada.fim || '',
     });
 
     const handleSubmit = (e) => {
@@ -25,6 +38,26 @@ export default function Edit({ turmaCriada, turmas, professores, alunos, totalAl
             setData('alunos', [...data.alunos, alunoId]);
         }
     };
+
+    const toggleDiaSemana = (dia) => {
+        if (data.dias_semana.includes(dia)) {
+            setData('dias_semana', data.dias_semana.filter((value) => value !== dia));
+        } else {
+            setData('dias_semana', [...data.dias_semana, dia]);
+        }
+    };
+
+    const orderedDias = diasSemanaOptions
+        .filter((dia) => data.dias_semana.includes(dia.value))
+        .map((dia) => dia.label);
+    const diasSelecionadosTexto = orderedDias.length > 0 ? orderedDias.join(', ') : '-';
+    const horarioTexto = data.inicio && data.fim
+        ? `${data.inicio} às ${data.fim}`
+        : data.inicio
+            ? `Início ${data.inicio}`
+            : data.fim
+                ? `Até ${data.fim}`
+                : '-';
 
     return (
         <CMSLayout>
@@ -127,6 +160,66 @@ export default function Edit({ turmaCriada, turmas, professores, alunos, totalAl
 
                         <Card>
                             <CardHeader>
+                                <CardTitle>Agenda da Turma</CardTitle>
+                                <CardDescription>Configure os dias e horários das aulas</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                <div>
+                                    <Label>Dias da semana</Label>
+                                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        {diasSemanaOptions.map((dia) => (
+                                            <button
+                                                type="button"
+                                                key={dia.value}
+                                                onClick={() => toggleDiaSemana(dia.value)}
+                                                className={`rounded-md border px-3 py-2 text-sm font-medium transition ${
+                                                    data.dias_semana.includes(dia.value)
+                                                        ? 'border-primary bg-primary/10 text-primary'
+                                                        : 'border-border hover:bg-muted'
+                                                }`}
+                                            >
+                                                {dia.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {errors.dias_semana && (
+                                        <p className="text-sm text-red-600 mt-2">{errors.dias_semana}</p>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="inicio">Horário de início</Label>
+                                        <input
+                                            id="inicio"
+                                            type="time"
+                                            value={data.inicio}
+                                            onChange={(e) => setData('inicio', e.target.value)}
+                                            className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${errors.inicio ? 'border-red-500' : ''}`}
+                                        />
+                                        {errors.inicio && (
+                                            <p className="text-sm text-red-600">{errors.inicio}</p>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="fim">Horário de término</Label>
+                                        <input
+                                            id="fim"
+                                            type="time"
+                                            value={data.fim}
+                                            onChange={(e) => setData('fim', e.target.value)}
+                                            className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${errors.fim ? 'border-red-500' : ''}`}
+                                        />
+                                        {errors.fim && (
+                                            <p className="text-sm text-red-600">{errors.fim}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
                                 <CardTitle>Alunos da Turma</CardTitle>
                                 <CardDescription>
                                     Selecione os alunos que farão parte desta turma
@@ -215,6 +308,14 @@ export default function Edit({ turmaCriada, turmas, professores, alunos, totalAl
                                     <div className="flex items-center justify-between text-sm">
                                         <span className="text-muted-foreground">Status:</span>
                                         <span className="font-medium">{data.status}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-muted-foreground">Dias:</span>
+                                        <span className="font-medium text-right">{diasSelecionadosTexto}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-muted-foreground">Horário:</span>
+                                        <span className="font-medium">{horarioTexto}</span>
                                     </div>
                                 </div>
 

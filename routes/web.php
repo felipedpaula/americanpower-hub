@@ -7,6 +7,7 @@ use App\Http\Controllers\CMS\UsuarioController;
 use App\Http\Controllers\Hub\AtividadeController;
 use App\Http\Controllers\Hub\AuthController as HubAuthController;
 use App\Http\Controllers\Hub\HubController;
+use App\Http\Controllers\Hub\TurmaController as HubTurmaController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -76,6 +77,9 @@ Route::prefix('hub')->name('hub.')->group(function () {
         Route::get('/dashboard', [HubController::class, 'dashboard'])->name('dashboard');
         Route::post('/logout', [HubAuthController::class, 'logout'])->name('logout');
         Route::get('/resources', [HubController::class, 'getAvailableResources'])->name('resources');
+
+        Route::get('/turmas', [HubTurmaController::class, 'index'])->name('turmas.index');
+        Route::get('/turmas/{id}', [HubTurmaController::class, 'show'])->name('turmas.show');
 
         // Rotas de Atividades
         Route::prefix('atividades')->name('atividades.')->group(function () {

@@ -7,6 +7,7 @@ use App\Models\Turma;
 use App\Models\TurmaCriada;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class TurmaController extends Controller
@@ -81,7 +82,22 @@ class TurmaController extends Controller
             'alunos' => 'nullable|array',
             'alunos.*' => 'exists:users,id',
             'status' => 'required|in:em andamento,bloqueada,encerrada',
+            'dias_semana' => 'nullable|array',
+            'dias_semana.*' => [
+                'string',
+                Rule::in(['domingo','segunda','terca','quarta','quinta','sexta','sabado']),
+            ],
+            'inicio' => 'nullable|date_format:H:i',
+            'fim' => 'nullable|date_format:H:i',
         ]);
+
+        if (!empty($validated['inicio']) && !empty($validated['fim']) && $validated['inicio'] >= $validated['fim']) {
+            return back()->withErrors([
+                'fim' => 'O horário de término deve ser maior que o horário de início.',
+            ])->withInput();
+        }
+
+        $validated['dias_semana'] = array_values($validated['dias_semana'] ?? []);
 
         // Validar se algum aluno já está alocado em outra turma
         if (!empty($validated['alunos'])) {
@@ -138,6 +154,9 @@ class TurmaController extends Controller
                 'professor_id' => $turmaCriada->professor_id,
                 'alunos' => $turmaCriada->alunos ?? [],
                 'status' => $turmaCriada->status,
+                'dias_semana' => $turmaCriada->dias_semana ?? [],
+                'inicio' => $turmaCriada->inicio,
+                'fim' => $turmaCriada->fim,
             ],
             'turmas' => $turmas,
             'professores' => $professores,
@@ -156,7 +175,22 @@ class TurmaController extends Controller
             'alunos' => 'nullable|array',
             'alunos.*' => 'exists:users,id',
             'status' => 'required|in:em andamento,bloqueada,encerrada',
+            'dias_semana' => 'nullable|array',
+            'dias_semana.*' => [
+                'string',
+                Rule::in(['domingo','segunda','terca','quarta','quinta','sexta','sabado']),
+            ],
+            'inicio' => 'nullable|date_format:H:i',
+            'fim' => 'nullable|date_format:H:i',
         ]);
+
+        if (!empty($validated['inicio']) && !empty($validated['fim']) && $validated['inicio'] >= $validated['fim']) {
+            return back()->withErrors([
+                'fim' => 'O horário de término deve ser maior que o horário de início.',
+            ])->withInput();
+        }
+
+        $validated['dias_semana'] = array_values($validated['dias_semana'] ?? []);
 
         // Validar se algum aluno já está alocado em outra turma (excluindo esta)
         if (!empty($validated['alunos'])) {

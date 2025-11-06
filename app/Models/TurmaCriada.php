@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
 
 class TurmaCriada extends Model
 {
@@ -11,10 +12,13 @@ class TurmaCriada extends Model
 
     protected $table = 'turmas_criadas';
 
-    protected $fillable = ['turma_id', 'alunos', 'professor_id', 'status'];
+    protected $fillable = ['turma_id', 'alunos', 'professor_id', 'status', 'dias_semana', 'inicio', 'fim'];
 
     protected $casts = [
         'alunos' => 'array',
+        'dias_semana' => 'array',
+        'inicio' => 'string',
+        'fim' => 'string',
     ];
 
     public function turma()
@@ -30,5 +34,25 @@ class TurmaCriada extends Model
     public function alunos()
     {
         return User::whereIn('id', $this->alunos ?? [])->get();
+    }
+
+    public function canAccess(User $user): bool
+    {
+        $userType = $user->userType->name;
+
+        if (in_array($userType, ['root', 'admin'])) {
+            return true;
+        }
+
+        if ($userType === 'professor') {
+            return $this->professor_id === $user->id;
+        }
+
+        if ($userType === 'aluno') {
+            $alunos = $this->alunos ?? [];
+            return in_array($user->id, $alunos) || in_array((string)$user->id, $alunos);
+        }
+
+        return false;
     }
 }

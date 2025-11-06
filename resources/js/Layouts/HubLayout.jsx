@@ -28,6 +28,7 @@ export default function HubLayout({ children }) {
         const navByType = {
             root: [
                 ...baseNav,
+                { name: 'Turmas', href: '/hub/turmas', icon: '🎓' },
                 { name: 'Atividades', href: '/hub/atividades', icon: '📝' },
                 { name: 'Usuários', href: '/hub/usuarios', icon: '👥' },
                 { name: 'Relatórios', href: '/hub/relatorios', icon: '📈' },
@@ -35,6 +36,7 @@ export default function HubLayout({ children }) {
             ],
             admin: [
                 ...baseNav,
+                { name: 'Turmas', href: '/hub/turmas', icon: '🎓' },
                 { name: 'Atividades', href: '/hub/atividades', icon: '📝' },
                 { name: 'Usuários', href: '/hub/usuarios', icon: '👥' },
                 { name: 'Relatórios', href: '/hub/relatorios', icon: '📈' },

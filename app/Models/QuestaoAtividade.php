@@ -14,6 +14,7 @@ class QuestaoAtividade extends Model
     protected $fillable = [
         'atividade_id',
         'enunciado',
+        'resposta_esperada',
         'status',
         'valor',
     ];

@@ -72,7 +72,7 @@ class AtividadeController extends Controller
             ->when($userType === 'professor', function ($q) use ($user) {
                 $q->where('professor_id', $user->id);
             })
-            ->where('status', 'em andamento')
+            ->where('status', '!=', 'encerrada')
             ->get();
 
         $tipos = AtividadeTipo::all();
@@ -104,12 +104,19 @@ class AtividadeController extends Controller
             'data_entrega' => 'nullable|date',
         ]);
 
+        $turma = TurmaCriada::findOrFail($validated['turma_id']);
+
         // Verifica se o professor tem permissão sobre a turma
         if ($userType === 'professor') {
-            $turma = TurmaCriada::findOrFail($validated['turma_id']);
             if ($turma->professor_id !== $user->id) {
                 abort(403, 'Você não tem permissão para criar atividades nesta turma.');
             }
+        }
+
+        if ($turma->status !== 'em andamento') {
+            return back()
+                ->withErrors(['turma_id' => 'Não é possível criar atividades para turmas bloqueadas ou encerradas.'])
+                ->withInput();
         }
 
         DB::beginTransaction();
@@ -117,7 +124,6 @@ class AtividadeController extends Controller
             $atividade = Atividade::create($validated);
 
             // Criar registros para todos os alunos da turma
-            $turma = TurmaCriada::findOrFail($validated['turma_id']);
             $alunos = $turma->alunos ?? [];
             
             $atividadesAlunoData = [];
@@ -213,7 +219,7 @@ class AtividadeController extends Controller
             ->when($userType === 'professor', function ($q) use ($user) {
                 $q->where('professor_id', $user->id);
             })
-            ->where('status', 'em andamento')
+            ->where('status', '!=', 'encerrada')
             ->get();
 
         $tipos = AtividadeTipo::all();
@@ -246,12 +252,19 @@ class AtividadeController extends Controller
             'data_entrega' => 'nullable|date',
         ]);
 
+        $turma = TurmaCriada::findOrFail($validated['turma_id']);
+
         // Verifica se o professor tem permissão sobre a turma
         if ($user->userType->name === 'professor') {
-            $turma = TurmaCriada::findOrFail($validated['turma_id']);
             if ($turma->professor_id !== $user->id) {
                 abort(403, 'Você não tem permissão para mover esta atividade para esta turma.');
             }
+        }
+
+        if ($turma->status !== 'em andamento') {
+            return back()
+                ->withErrors(['turma_id' => 'Não é possível alterar atividades vinculadas a turmas bloqueadas ou encerradas.'])
+                ->withInput();
         }
 
         $atividade->update($validated);
@@ -297,6 +310,7 @@ class AtividadeController extends Controller
                 'nota_max' => $atividade->nota_max,
                 'turma' => [
                     'nome' => $atividade->turma->turma->nome ?? null,
+                    'status' => $atividade->turma->status,
                 ],
             ],
         ]);
@@ -317,6 +331,7 @@ class AtividadeController extends Controller
         $validated = $request->validate([
             'enunciado' => 'required|string',
             'valor' => 'required|numeric|min:0|max:999999.99',
+            'resposta_esperada' => 'nullable|string',
         ]);
 
         DB::beginTransaction();
@@ -324,6 +339,7 @@ class AtividadeController extends Controller
             $questao = QuestaoAtividade::create([
                 'atividade_id' => $id,
                 'enunciado' => $validated['enunciado'],
+                'resposta_esperada' => $validated['resposta_esperada'] ?? null,
                 'valor' => $validated['valor'],
                 'status' => 'ativa',
             ]);
@@ -350,6 +366,7 @@ class AtividadeController extends Controller
 
             return back()->with('success', 'Questão adicionada com sucesso!');
         } catch (\Exception $e) {
+            DB::rollBack();
             return back()->withErrors(['error' => 'Erro ao adicionar questão: ' . $e->getMessage()]);
         }
     }
@@ -371,6 +388,7 @@ class AtividadeController extends Controller
             'enunciado' => 'required|string',
             'valor' => 'required|numeric|min:0|max:999999.99',
             'status' => ['required', Rule::in(['ativa', 'anulada'])],
+            'resposta_esperada' => 'nullable|string',
         ]);
 
         try {

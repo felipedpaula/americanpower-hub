@@ -25,7 +25,9 @@ const formatDate = (value) => {
 export default function ShowAtividade({ atividade, estatisticas, atividadeAluno, respostasAluno }) {
     const { props } = usePage();
     const userType = props.user?.type || props.auth?.user?.user_type?.name;
-    const canManage = ['professor', 'admin', 'root'].includes(userType);
+    const canManageBase = ['professor', 'admin', 'root'].includes(userType);
+    const turmaStatus = atividade?.turma?.status;
+    const canManage = canManageBase && turmaStatus === 'em andamento';
     const flash = props.flash || {};
 
     const questoes = useMemo(() => atividade?.questoes ?? [], [atividade?.questoes]);
@@ -35,6 +37,7 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
         enunciado: '',
         valor: '',
         status: 'ativa',
+        resposta_esperada: '',
     });
 
     const startEditingQuestao = (questao) => {
@@ -44,6 +47,7 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
             enunciado: questao.enunciado ?? '',
             valor: questao.valor ?? '',
             status: questao.status ?? 'ativa',
+            resposta_esperada: questao.resposta_esperada ?? '',
         }));
         questaoForm.clearErrors();
     };
@@ -98,6 +102,11 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
                         <p className="text-muted-foreground text-sm">
                             {atividade.turma?.turma?.nome ?? 'Turma não informada'}
                         </p>
+                        {turmaStatus && turmaStatus !== 'em andamento' && (
+                            <p className="text-xs text-orange-600">
+                                Esta turma está {turmaStatus}. Atividades e questões permanecem somente para consulta.
+                            </p>
+                        )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
@@ -271,6 +280,16 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
                                                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
                                                         {questao.enunciado}
                                                     </p>
+                                                    {questao.resposta_esperada && (
+                                                        <div className="rounded-md bg-muted/60 p-3">
+                                                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                                Resposta esperada
+                                                            </p>
+                                                            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                                                                {questao.resposta_esperada}
+                                                            </p>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 {canManage && editingQuestaoId !== questao.id && (
                                                     <div className="flex gap-2">
@@ -348,6 +367,24 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
                                                                 </p>
                                                             )}
                                                         </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <Label htmlFor={`resposta_esperada-${questao.id}`}>Resposta esperada (opcional)</Label>
+                                                        <textarea
+                                                            id={`resposta_esperada-${questao.id}`}
+                                                            value={questaoForm.data.resposta_esperada}
+                                                            onChange={(event) =>
+                                                                questaoForm.setData('resposta_esperada', event.target.value)
+                                                            }
+                                                            placeholder="Atualize a resposta de referência desta questão"
+                                                            className={`${inputClass} min-h-[120px] resize-y`}
+                                                        />
+                                                        {questaoForm.errors.resposta_esperada && (
+                                                            <p className="mt-2 text-sm text-destructive">
+                                                                {questaoForm.errors.resposta_esperada}
+                                                            </p>
+                                                        )}
                                                     </div>
 
                                                     <div className="flex justify-end gap-2">

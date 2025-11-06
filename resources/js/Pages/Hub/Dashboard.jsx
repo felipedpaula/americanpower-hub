@@ -26,6 +26,38 @@ const getAlunosCount = (alunosField) => {
     return 0;
 };
 
+const weekdayLabels = {
+    domingo: 'Dom',
+    segunda: 'Seg',
+    terca: 'Ter',
+    quarta: 'Qua',
+    quinta: 'Qui',
+    sexta: 'Sex',
+    sabado: 'Sáb',
+};
+
+const formatDiasFromTurma = (turma) => {
+    const dias = turma?.dias_semana;
+    if (!Array.isArray(dias) || dias.length === 0) {
+        return 'dias não definidos';
+    }
+    const ordered = Object.keys(weekdayLabels).filter((dia) => dias.includes(dia));
+    return ordered.length > 0
+        ? ordered.map((dia) => weekdayLabels[dia]).join(', ')
+        : 'dias não definidos';
+};
+
+const formatHorarioFromTurma = (turma) => {
+    const { inicio, fim } = turma || {};
+    if (!inicio && !fim) {
+        return 'horário indefinido';
+    }
+    if (inicio && fim) {
+        return `${inicio} às ${fim}`;
+    }
+    return inicio ? `início às ${inicio}` : `até ${fim}`;
+};
+
 export default function Dashboard({ user, stats, turmas }) {
     const renderDashboardByType = () => {
         switch (user.type) {
@@ -93,6 +125,9 @@ export default function Dashboard({ user, stats, turmas }) {
                                                         </h3>
                                                         <p className="text-sm text-muted-foreground">
                                                             {getAlunosCount(turmaCriada.alunos)} alunos
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {formatDiasFromTurma(turmaCriada)} · {formatHorarioFromTurma(turmaCriada)}
                                                         </p>
                                                     </div>
                                                     <Badge variant={
@@ -166,7 +201,10 @@ export default function Dashboard({ user, stats, turmas }) {
                                                             {turmaCriada.turma.nome}
                                                         </h3>
                                                         <p className="text-sm text-muted-foreground">
-                                                            Professor: {turmaCriada.professor.name}
+                                                            Professor: {turmaCriada.professor?.name ?? 'Não definido'}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {formatDiasFromTurma(turmaCriada)} · {formatHorarioFromTurma(turmaCriada)}
                                                         </p>
                                                     </div>
                                                     <Badge variant={

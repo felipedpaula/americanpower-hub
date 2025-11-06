@@ -78,6 +78,10 @@ class Atividade extends Model
     {
         $userType = $user->userType->name;
 
+        if (!$this->turma || $this->turma->status !== 'em andamento') {
+            return false;
+        }
+
         // Admin e Root podem editar
         if (in_array($userType, ['root', 'admin'])) {
             return true;
