@@ -91,6 +91,7 @@ Route::prefix('hub')->name('hub.')->group(function () {
                 Route::delete('/{id}', [AtividadeController::class, 'destroy'])->name('destroy');
 
                 // Gestão de questões
+                Route::get('/{id}/questoes/create', [AtividadeController::class, 'createQuestao'])->name('questoes.create');
                 Route::post('/{id}/questoes', [AtividadeController::class, 'addQuestao'])->name('questoes.store');
                 Route::put('/{id}/questoes/{questaoId}', [AtividadeController::class, 'updateQuestao'])->name('questoes.update');
                 Route::delete('/{id}/questoes/{questaoId}', [AtividadeController::class, 'destroyQuestao'])->name('questoes.destroy');
