@@ -1,323 +1,102 @@
 # American Power Hub
 
-Sistema de gestão para escola de inglês American Power, dividido em 3 áreas independentes:
+Sistema completo de gestão escolar para a American Power, dividido em três experiências conectadas:
 
-- **Site Institucional** (Blade) - Home, sobre, cursos, contato
-- **CMS Administrativo** (React + Inertia) - Gestão de turmas e usuários (alunos, professores e colaboradores)
-- **Portal do Aluno** (React + Inertia) - Área exclusiva do aluno
+- **Site Institucional** (Blade) – página pública com informações de cursos e contato.
+- **CMS Administrativo** (Laravel + Inertia + React) – controle interno de turmas, usuários e dados institucionais.
+- **Portal Hub** (Laravel + Inertia + React) – ambiente unificado para administradores, professores e alunos acompanharem turmas, atividades e notas.
 
 ---
 
-## 🛠️ Stack Tecnológica
+## 📦 Stack Tecnológica
 
 ### Backend
-- **Laravel 10.10** (PHP 8.1+)
-- **Inertia.js 2.0** - Bridge Laravel ↔ React
-- **MySQL** - Banco de dados
+- **Laravel 10.10** executando em **PHP 8.1+** – APIs, autenticação, permissões e renderização Inertia.
+- **Inertia.js 2.0** – ponte entre Laravel e React.
+- **MySQL 8** – banco relacional com *checks* e *triggers* para controle de notas e vínculos.
 
 ### Frontend
-- **React 19** - UI Library
-- **Vite 5** - Build tool e dev server
-- **Tailwind CSS 4** - Framework CSS (via @tailwindcss/postcss)
-- **shadcn/ui** - Componentes UI (Button, Card, Input, Label)
-- **Lucide Icons** - Ícones (via CDN)
+- **React 19** com **Vite 5** para build e HMR.
+- **Tailwind CSS 4** via `@tailwindcss/postcss`, `tailwind-merge` e `tailwindcss-animate` para estilos utilitários.
+- **shadcn/ui** e **Radix UI** (Select) compondo a biblioteca de componentes reutilizáveis.
+- **Lucide Icons** e **axios** para ícones e chamadas HTTP.
+
+### Ferramentas de suporte
+- **Composer**, **NPM** e **Vite** para gerenciamento de dependências e bundling.
+- Alias `@/` configurado em `jsconfig.json` para imports absolutos.
 
 ---
 
-## 📦 Instalação
+## ✅ Pré-requisitos
 
-### 1. Dependências
+| Ferramenta | Versão recomendada |
+| ---------- | ------------------ |
+| PHP        | 8.1 ou superior |
+| Composer   | 2.x |
+| Node.js    | 20.x |
+| NPM        | 10.x |
+| MySQL      | 8.x |
+
+> 💡 Caso utilize Docker/Sail, adapte os comandos abaixo para o ambiente containerizado.
+
+---
+
+## ⚙️ Configuração inicial
+
+1. **Clonar e instalar dependências**
+   ```bash
+   git clone <repo>
+   cd americanpower-hub
+   composer install
+   npm install
+   ```
+2. **Configurar o `.env`**
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
+   Ajuste pelo menos as variáveis de banco de dados:
+   ```env
+   DB_CONNECTION=mysql
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_DATABASE=americanpower_hub
+   DB_USERNAME=root
+   DB_PASSWORD=secret
+   ```
+3. **Migrar e popular o banco**
+   ```bash
+   php artisan migrate --seed
+   ```
+   O seed executa:
+   - `UserTypesSeeder` – perfis e níveis de permissão (root → aluno).
+   - `UsersSeeder` – usuários de exemplo (atualize o campo `cpf` obrigatório antes de rodar).
+   - `TurmasSeeder` – catálogo base de turmas.
+   - `AtividadeTiposSeeder` – tipos de atividades (tarefa, trabalho, prova).
+   - `SettingsSeeder` – informações institucionais padrão.
+
+   > ⚠️ A coluna `cpf` em `users` é obrigatória; antes de executar `--seed`, informe valores únicos de 11 dígitos nos usuários de exemplo ou cadastre manualmente via interface.
+
+---
+
+## 🚀 Execução em desenvolvimento
+
+Use dois terminais:
+
 ```bash
-composer install
-npm install
+# Terminal 1 – API Laravel
+php artisan serve        # http://localhost:8000
+
+# Terminal 2 – Frontend Vite
+npm run dev              # http://localhost:3000 (HMR)
 ```
 
-### 2. Configuração do Ambiente
-```bash
-cp .env.example .env
-php artisan key:generate
-```
+> Para acesso externo (Docker/WSL), execute `npm run dev -- --host` e exponha a porta 3000.
 
-Configure as variáveis de banco de dados no `.env`:
-```env
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=americanpower_hub
-DB_USERNAME=root
-DB_PASSWORD=
-```
+Build de produção e otimizações Laravel:
 
-### 3. Banco de Dados
-```bash
-php artisan migrate:fresh --seed
-```
-
-**Seeders executados:**
-- `UserTypesSeeder` - Tipos de usuários (root, admin, professor, colaborador, aluno)
-- `UsersSeeder` - Usuário root padrão (`felipeppdev@gmail.com` / `12345678`)
-- `TurmasSeeder` - Turmas padrão (1a, 1b, 2a, 2b, 3a, 3b, advanced)
-
----
-
-## 🚀 Desenvolvimento
-
-### Servidor Local
-```bash
-# Terminal 1 - Backend Laravel
-php artisan serve
-# Acesse: http://localhost:8000
-
-# Terminal 2 - Frontend Vite (HMR)
-npm run dev
-# Vite rodará em: http://localhost:3000
-```
-
-### Docker (se aplicável)
-```bash
-# Vite configurado para host 0.0.0.0:3000
-# HMR via host: americanpower
-```
-
----
-
-## 🗂️ Estrutura do Projeto
-
-### Backend (Laravel)
-
-```
-app/
-├── Http/
-│   ├── Controllers/
-│   │   ├── Auth/
-│   │   │   └── LoginController.php            # Autenticação CMS
-│   │   └── CMS/
-│   │       ├── TurmaController.php           # CRUD de turmas (root/admin)
-│   │       └── UsuarioController.php         # CRUD de usuários (alunos, profs, colaboradores)
-│   └── Middleware/
-│       ├── CheckPermission.php               # Middleware de permissões (level >= 3)
-│       └── CheckAdminPermission.php          # Restringe módulos a root/admin (level >= 4)
-├── Models/
-│   ├── User.php                         # Usuário (com user_type_id)
-│   ├── UserType.php                     # Tipos de usuários
-│   ├── Turma.php                        # Turmas disponíveis
-│   └── TurmaCriada.php                  # Turmas instanciadas
-
-database/
-├── migrations/
-│   ├── 2014_10_11_000000_create_user_types_table.php
-│   ├── 2014_10_12_000000_create_users_table.php
-│   ├── 2025_11_03_220000_create_turmas_table.php
-│   └── 2025_11_03_220100_create_turmas_criadas_table.php
-└── seeders/
-    ├── UserTypesSeeder.php
-    ├── UsersSeeder.php
-    └── TurmasSeeder.php
-
-routes/
-└── web.php                              # Rotas site + CMS
-```
-
-### Frontend (React + Blade)
-
-```
-resources/
-├── views/
-│   ├── layouts/
-│   │   └── site.blade.php               # Layout do site institucional
-│   ├── site/
-│   │   ├── partials/
-│   │   │   ├── head.blade.php           # Meta tags, CSS, scripts
-│   │   │   ├── header.blade.php         # Header com nav responsivo
-│   │   │   └── footer.blade.php         # Footer
-│   │   └── home.blade.php               # Página inicial do site
-│   └── app.blade.php                    # Template Inertia (CMS/Aluno)
-│
-├── js/
-│   ├── app.jsx                          # Entry point Inertia
-│   ├── Pages/
-│   │   ├── Auth/
-│   │   │   └── Login.jsx                      # Login CMS (shadcn/ui)
-│   │   ├── CMS/
-│   │   │   └── Usuarios/                     # Páginas do módulo de usuários
-│   │   │       ├── Index.jsx                 # Lista por categoria com estatísticas
-│   │   │       ├── Create.jsx                # Cadastro com seleção de perfil
-│   │   │       └── Edit.jsx                  # Edição com redefinição opcional de senha
-│   │   └── Dashboard.jsx                     # Dashboard CMS
-│   ├── components/
-│   │   └── ui/                          # Componentes shadcn/ui
-│   │       ├── button.jsx
-│   │       ├── card.jsx
-│   │       ├── input.jsx
-│   │       └── label.jsx
-│   └── lib/
-│       └── utils.js                     # Helper cn() para classes CSS
-│
-└── css/
-    └── app.css                          # Tailwind + variáveis CSS shadcn
-
-Configurações:
-├── vite.config.js                       # Vite + React + Laravel plugin
-├── tailwind.config.js                   # Tailwind + cores shadcn
-├── postcss.config.js                    # @tailwindcss/postcss
-└── jsconfig.json                        # Alias @/* para imports
-```
-
----
-
-## 👥 Módulo de Usuários do CMS
-
-- **Acesso restrito:** protegido pelos middlewares `auth`, `check.permission` (nível ≥ 3) e `check.admin` (nível ≥ 4), permitindo apenas usuários root e admin gerenciarem alunos, professores e colaboradores.
-- **Listagem segmentada:** dashboard dedicado com estatísticas totais e filtragem por categoria (alunos, professores, colaboradores) para facilitar a visualização e manutenção.
-- **Ações rápidas:** criação, edição e exclusão diretamente da tabela com confirmações e atalhos para registrar novos perfis.
-- **Formulários guiados:** telas de criação e edição contam com validações, seleção do tipo de usuário e redefinição opcional de senha, além de cards laterais com orientações.
-- **Validação backend:** `UsuarioController` garante que apenas os tipos permitidos sejam manipulados e bloqueia tentativas de acesso a usuários fora do escopo do módulo.
-
----
-
-## 🗄️ Banco de Dados
-
-### Tabelas Principais
-
-#### `user_types`
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | bigint | PK |
-| name | string | Nome do tipo (unique) |
-| permission_level | int | Nível de permissão (1-5) |
-
-**Níveis de permissão:**
-- 5 = root
-- 4 = admin
-- 3 = professor
-- 2 = colaborador
-- 1 = aluno
-
-#### `users`
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | bigint | PK |
-| name | string | Nome do usuário |
-| email | string | Email (unique) |
-| password | string | Senha (hash) |
-| user_type_id | bigint | FK → user_types |
-| email_verified_at | timestamp | nullable |
-
-#### `turmas`
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | bigint | PK |
-| nome | string | Nome da turma (unique) |
-| ordem | int | Ordem de exibição |
-
-**Turmas padrão:** 1a, 1b, 2a, 2b, 3a, 3b, advanced
-
-#### `turmas_criadas`
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | bigint | PK |
-| turma_id | bigint | FK → turmas |
-| alunos | json | Array de IDs de alunos |
-| professor_id | bigint | FK → users |
-| status | enum | 'em andamento', 'bloqueada', 'encerrada' |
-
----
-
-## 🔐 Sistema de Autenticação e Permissões
-
-### Middleware `CheckPermission`
-- Verifica se usuário está autenticado
-- Valida `permission_level >= 3` (professor, admin, root)
-- Redireciona não autorizados para login
-
-### Middleware `CheckAdminPermission`
-- Reforça a checagem para `permission_level >= 4`
-- Bloqueia módulos administrativos sensíveis (turmas e usuários) para perfis abaixo de admin
-- Em caso de bloqueio, retorna HTTP 403 com mensagem de acesso negado
-
-### Rotas Protegidas
-```php
-// Acesso público
-GET / → Site institucional (Blade)
-
-// CMS - Autenticação
-GET /cms → Redireciona para /cms/login ou /cms/dashboard
-GET /cms/login → Página de login
-POST /cms/login → Processa login
-
-// CMS - Área protegida (permission_level >= 3)
-GET /cms/dashboard → Dashboard
-POST /cms/logout → Logout
-
-// CMS - Recursos restritos a root/admin (permission_level >= 4)
-Route::middleware('check.admin')->group(function () {
-    Route::resource('turmas', TurmaController::class);
-    Route::resource('usuarios', UsuarioController::class)->except(['show']);
-});
-```
-
----
-
-## 🎨 Sistema de Design (shadcn/ui)
-
-### Variáveis CSS
-Definidas em `resources/css/app.css`:
-- `--background`, `--foreground`
-- `--primary`, `--secondary`
-- `--muted`, `--accent`
-- `--destructive`
-- `--border`, `--input`, `--ring`
-- `--radius`
-
-### Componentes Disponíveis
-- **Button** - Variantes: default, destructive, outline, secondary, ghost, link
-- **Card** - Container com header, title, description, content, footer
-- **Input** - Input estilizado com ring focus
-- **Label** - Label para formulários
-
-### Uso
-```jsx
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-
-<Button variant="default">Clique</Button>
-<Card>
-  <CardHeader>
-    <CardTitle>Título</CardTitle>
-  </CardHeader>
-</Card>
-```
-
----
-
-## 📝 Convenções de Código
-
-### React Components
-- Usar `/** @jsxImportSource react */` no topo dos arquivos `.jsx`
-- Não importar React explicitamente (JSX Transform automático)
-- Usar alias `@/` para imports (`@/components/ui/button`)
-
-### Blade Templates
-- Site usa layout `layouts.site`
-- Partials em `site/partials/`
-- Assets via helper `asset()`
-
-### Models
-- Relacionamentos definidos (hasMany, belongsTo)
-- Casts para JSON (ex: `alunos` em TurmaCriada)
-- Fillable declarado
-
----
-
-## 🚢 Produção
-
-### Build
 ```bash
 npm run build
-```
-
-### Otimizações Laravel
-```bash
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
@@ -325,29 +104,110 @@ php artisan view:cache
 
 ---
 
-## 📌 Credenciais Padrão
+## 🗂️ Estrutura principal
 
-**Usuário Root:**
-- Email: `felipeppdev@gmail.com`
-- Senha: `12345678`
-- Tipo: root (permission_level: 5)
+```
+app/
+├── Http/
+│   ├── Controllers/
+│   │   ├── CMS/                    # Login, configurações, turmas e usuários
+│   │   └── Hub/                    # Dashboard, turmas, atividades e correções
+│   └── Middleware/
+│       ├── CheckAdminPermission.php  # Restringe CMS a permission_level ≥ 4
+│       ├── CheckPermission.php       # Protege recursos do Hub por nível de acesso
+│       └── HubAccess.php             # Bloqueia colaboradores no Hub
+├── Models/
+│   ├── User.php / UserType.php      # Perfis e relacionamentos
+│   ├── Turma.php / TurmaCriada.php  # Catálogo + instâncias com horários e alunos únicos
+│   ├── Atividade*.php               # Gestão de atividades, questões e submissões
+│   └── Setting.php                  # Dados institucionais da escola
+resources/
+├── views/site                       # Site institucional em Blade
+└── js/
+    ├── Layouts/CMSLayout.jsx        # Layout base do CMS com navegação protegida
+    ├── Pages/
+    │   ├── CMS/*                    # Telas de turmas, usuários e configurações
+    │   └── Hub/*                    # Dashboard, turmas, atividades e fluxo de correção
+    └── components/ui/*              # Kit shadcn/ui adaptado
+```
 
 ---
 
-## 🔧 Troubleshooting
+## 🔐 Perfis e permissões
 
-### Erro: "Cannot apply unknown utility class"
-- Certifique-se de ter instalado `@tailwindcss/postcss`
-- Verifique `postcss.config.js` usa `@tailwindcss/postcss`
+Os tipos de usuário (com `permission_level`) determinam o acesso a cada módulo.
 
-### Erro: "@routes impresso como texto"
-- Diretiva removida (Ziggy não instalado)
-- URLs hardcoded nos componentes React
+| Tipo           | Nível | Acesso                                                                 |
+| -------------- | ----- | ---------------------------------------------------------------------- |
+| Root (5)       | Total | CMS completo, Hub completo, configurações institucionais.             |
+| Admin (4)      | Elevado | CMS (exceto gestão de Root), Hub completo.                            |
+| Professor (3)  | Docente | Hub com turmas próprias, criação/correção de atividades.             |
+| Colaborador (2)| Suporte | Login CMS restrito às áreas liberadas; sem acesso ao Hub. |
+| Aluno (1)      | Estudante | Hub com turmas matriculadas, envio de atividades e acompanhamento. |
 
-### Erro: "route is not defined"
-- Usar URLs diretos: `post('/cms/login')` em vez de `post(route('cms.login'))`
+Middlewares dedicados garantem essas regras nos grupos de rotas `/cms` e `/hub`.
 
 ---
 
-**American Power** - English School for Kids 🇺🇸
+## 🧭 Principais fluxos
 
+### CMS Administrativo
+- **Dashboard protegido** por `check.admin`, disponível para permission level ≥ 4.
+- **Turmas**: CRUD completo com status (`em andamento`, `bloqueada`, `encerrada`), vínculo de professor, horário e validação que evita alunos duplicados em diferentes turmas.
+- **Usuários**: listagem segmentada (root, admin, professores, colaboradores, alunos), filtros e exclusão com salvaguardas por tipo.
+- **Configurações da Escola**: formulário para dados institucionais, canais e modelo de calendário.
+
+### Portal Hub
+- **Login dedicado (`/hub/login`)** com middleware `hub.access` evitando acesso de colaboradores.
+- **Dashboard contextual** exibe estatísticas para admins, turmas para professores e alunos.
+- **Turmas**: professores visualizam suas turmas criadas e alunos veem matrículas ativas.
+- **Atividades**:
+  - Criação restrita a professores/admin/root com verificação de status da turma.
+  - Gestão de questões com limites de nota, *triggers* de consistência e cadastro automático de respostas por aluno.
+  - Fluxo de submissão do aluno, correção por professores e atualização automática de notas parciais/total.
+
+---
+
+## 🗄️ Banco de dados
+
+- **users**: inclui campos obrigatórios `cpf`, `status` e opcionais `telefone`, `data_nasc`.
+- **turmas_criadas**: registra alunos (JSON), professor, status e horários (`dias_semana`, `inicio`, `fim`).
+- **atividade***: conjunto de tabelas para atividades, submissões, questões e respostas, com *constraints* e *triggers* garantindo soma de notas e atualização automática de totais.
+- **settings**: dados institucionais centralizados, consumidos pelo CMS.
+
+---
+
+## 🧪 Testes
+
+Os *stubs* padrão do Laravel estão prontos em `tests/Feature` e `tests/Unit`. Rode:
+
+```bash
+php artisan test
+```
+
+---
+
+## 🔑 Credenciais seed de exemplo
+
+| Perfil | E-mail | Senha |
+| ------ | ------ | ----- |
+| Root   | `felipeppdev@gmail.com` | `12345678` |
+| Admin  | `admin@americanpower.com` | `12345678` |
+| Professores | `joao@americanpower.com`, `maria@americanpower.com` | `12345678` |
+| Alunos | `pedro@aluno.com`, `ana@aluno.com`, `lucas@aluno.com`, `julia@aluno.com` | `12345678` |
+
+> Atualize os CPFs em `database/seeders/UsersSeeder.php` antes de utilizar essas contas em um banco novo.
+
+---
+
+## 🧰 Troubleshooting
+
+| Problema | Solução |
+| -------- | ------- |
+| **"SQLSTATE[23000]: Duplicate entry '' for key 'users_cpf_unique'"** | Ajuste os CPFs no `UsersSeeder` para valores únicos de 11 dígitos antes de rodar `migrate --seed`. |
+| **"Cannot apply unknown utility class"** | Garanta que `@tailwindcss/postcss` está instalado e referenciado em `postcss.config.js`. |
+| **"@routes impresso como texto" / `route is not defined`** | Ziggy não está configurado; utilize URLs diretas (ex.: `post('/cms/login')`). |
+
+---
+
+**American Power** – English School for Kids 🇺🇸
