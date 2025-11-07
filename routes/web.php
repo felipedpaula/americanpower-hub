@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CMS\AuthController as CMSAuthController;
+use App\Http\Controllers\CMS\FinanceiroAlunoController;
 use App\Http\Controllers\CMS\SettingController;
 use App\Http\Controllers\CMS\TurmaController;
 use App\Http\Controllers\CMS\UsuarioController;
@@ -48,6 +49,12 @@ Route::prefix('cms')->name('cms.')->group(function () {
         Route::middleware('check.admin')->group(function () {
             Route::resource('turmas', TurmaController::class);
             Route::resource('usuarios', UsuarioController::class)->except(['show']);
+            Route::prefix('financeiro')->name('financeiro.')->group(function () {
+                Route::get('/', [FinanceiroAlunoController::class, 'index'])->name('index');
+                Route::get('/alunos/{aluno}', [FinanceiroAlunoController::class, 'show'])->name('alunos.show');
+                Route::get('/alunos/{aluno}/competencias/{competencia}', [FinanceiroAlunoController::class, 'showCompetencia'])->name('alunos.competencias.show');
+                Route::put('/alunos/{aluno}/competencias/{competencia}', [FinanceiroAlunoController::class, 'updateCompetencia'])->name('alunos.competencias.update');
+            });
         });
     });
 });
