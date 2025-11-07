@@ -12,7 +12,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import FinanceiroTabs from './components/Tabs';
+import FinanceiroTabs from '../components/Tabs';
 
 const STATUS_COLORS = {
     aberto: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
@@ -26,18 +26,18 @@ const SITUACAO_CONFIG = {
     em_dia: {
         icon: '✅',
         title: 'Tudo em dia',
-        description: 'Nenhuma mensalidade em atraso registrada.',
+        description: 'Nenhum lançamento em atraso registrado.',
         classes: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-200',
     },
     atrasado: {
         icon: '⚠️',
         title: 'Pendências detectadas',
-        description: 'Existem mensalidades atrasadas ou pendentes de pagamento.',
+        description: 'Existem lançamentos atrasados ou pendentes de pagamento.',
         classes: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200',
     },
 };
 
-export default function Show({ aluno, resumo, anoAtual, anosDisponiveis = [], meses = [], statusOptions = [], tabs = [] }) {
+export default function Show({ professor, resumo, anoAtual, anosDisponiveis = [], meses = [], statusOptions = [], tabs = [] }) {
     const { props } = usePage();
 
     const statusMap = useMemo(() => {
@@ -52,32 +52,25 @@ export default function Show({ aluno, resumo, anoAtual, anosDisponiveis = [], me
     const situacao = SITUACAO_CONFIG[resumo?.situacao || 'em_dia'];
 
     const handleChangeAno = (value) => {
-        router.get(`/cms/financeiro/alunos/${aluno.id}`, { ano: value }, { preserveState: true, preserveScroll: true });
+        router.get(`/cms/financeiro/professores/${professor.id}`, { ano: value }, { preserveState: true, preserveScroll: true });
     };
 
     return (
         <CMSLayout>
-            <Head title={`Financeiro - ${aluno?.name}`} />
+            <Head title={`Financeiro - ${professor?.name}`} />
 
             <div className="space-y-6 animate-fadeIn">
                 <FinanceiroTabs tabs={tabs} className="justify-start md:justify-end" />
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <Link href="/cms/financeiro" className="text-sm text-muted-foreground hover:text-foreground">
-                            ← Voltar para listagem de alunos
+                        <Link href="/cms/financeiro/professores" className="text-sm text-muted-foreground hover:text-foreground">
+                            ← Voltar para listagem de professores
                         </Link>
-                        <h1 className="mt-2 text-3xl font-bold text-foreground dark:text-foreground">{aluno?.name}</h1>
-                        <p className="mt-1 text-sm text-muted-foreground">{aluno?.email}</p>
+                        <h1 className="mt-2 text-3xl font-bold text-foreground dark:text-foreground">{professor?.name}</h1>
+                        <p className="mt-1 text-sm text-muted-foreground">{professor?.email}</p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                        {aluno?.turma ? (
-                            <div className="text-sm text-muted-foreground">
-                                Turma: <span className="font-medium text-foreground">{aluno.turma.nome}</span>
-                            </div>
-                        ) : (
-                            <div className="text-sm text-muted-foreground">Sem turma vinculada</div>
-                        )}
-                        <Badge variant={aluno?.status === 'ativo' ? 'default' : 'secondary'}>{aluno?.status_label}</Badge>
+                        <Badge variant={professor?.status === 'ativo' ? 'default' : 'secondary'}>{professor?.status_label}</Badge>
                     </div>
                 </div>
 
@@ -116,11 +109,11 @@ export default function Show({ aluno, resumo, anoAtual, anosDisponiveis = [], me
                             </p>
                         </div>
                         <div>
-                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Mensalidades atrasadas</span>
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Lançamentos atrasados</span>
                             <p className="text-xl font-semibold text-foreground">{resumo?.contagem?.atrasados || 0}</p>
                         </div>
                         <div>
-                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Mensalidades pagas</span>
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Lançamentos pagos</span>
                             <p className="text-xl font-semibold text-foreground">{resumo?.contagem?.pagos || 0}</p>
                         </div>
                     </CardContent>
@@ -129,7 +122,7 @@ export default function Show({ aluno, resumo, anoAtual, anosDisponiveis = [], me
                 <Card>
                     <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <CardTitle>Mensalidades por competência</CardTitle>
+                            <CardTitle>Pagamentos por competência</CardTitle>
                             <CardDescription>
                                 Acompanhe o status de cada mês do ano selecionado. Clique para visualizar ou editar os detalhes.
                             </CardDescription>
@@ -152,10 +145,7 @@ export default function Show({ aluno, resumo, anoAtual, anosDisponiveis = [], me
                     <CardContent>
                         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                             {meses.map((mes) => (
-                                <Card
-                                    key={mes.competencia}
-                                    className="border border-border bg-card hover:border-primary transition-colors"
-                                >
+                                <Card key={mes.competencia} className="border border-border bg-card hover:border-primary transition-colors">
                                     <CardHeader className="flex flex-row items-center justify-between space-y-0">
                                         <div>
                                             <CardTitle className="text-base font-semibold capitalize">{mes.label}</CardTitle>
@@ -191,10 +181,10 @@ export default function Show({ aluno, resumo, anoAtual, anosDisponiveis = [], me
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-between">
-                                            <span className="text-muted-foreground">Vencimento</span>
+                                            <span className="text-muted-foreground">Previsão</span>
                                             <span className="font-medium">
-                                                {mes.data_vencimento
-                                                    ? new Date(mes.data_vencimento).toLocaleDateString('pt-BR')
+                                                {mes.data_prevista
+                                                    ? new Date(mes.data_prevista).toLocaleDateString('pt-BR')
                                                     : '—'}
                                             </span>
                                         </div>
@@ -207,7 +197,7 @@ export default function Show({ aluno, resumo, anoAtual, anosDisponiveis = [], me
                                             </span>
                                         </div>
                                         <div className="pt-3">
-                                            <Link href={`/cms/financeiro/alunos/${aluno.id}/competencias/${mes.competencia}`}>
+                                            <Link href={`/cms/financeiro/professores/${professor.id}/competencias/${mes.competencia}`}>
                                                 <Button variant="outline" className="w-full" size="sm">
                                                     Visualizar mês
                                                 </Button>

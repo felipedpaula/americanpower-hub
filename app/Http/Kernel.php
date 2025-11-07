@@ -61,6 +61,7 @@ class Kernel extends HttpKernel
         'can' => \Illuminate\Auth\Middleware\Authorize::class,
         'check.permission' => \App\Http\Middleware\CheckPermission::class,
         'check.admin' => \App\Http\Middleware\CheckAdminPermission::class,
+        'check.root' => \App\Http\Middleware\CheckRootAccess::class,
         'hub.access' => \App\Http\Middleware\HubAccess::class,
         'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
         'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,

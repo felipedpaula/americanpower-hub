@@ -12,14 +12,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import FinanceiroTabs from './components/Tabs';
+import FinanceiroTabs from '../components/Tabs';
 
-export default function Competencia({ aluno, competencia, registro = {}, statusOptions = [], tabs = [] }) {
+export default function Competencia({ colaborador, competencia, registro = {}, statusOptions = [], tabs = [] }) {
     const { props } = usePage();
 
     const form = useForm({
         valor_previsto: registro?.valor_previsto ?? '',
-        data_vencimento: registro?.data_vencimento ?? '',
+        data_prevista: registro?.data_prevista ?? '',
         valor_pago: registro?.valor_pago ?? '',
         data_pagamento: registro?.data_pagamento ?? '',
         metodo: registro?.metodo ?? '',
@@ -29,25 +29,25 @@ export default function Competencia({ aluno, competencia, registro = {}, statusO
 
     const handleSubmit = (event) => {
         event.preventDefault();
-        form.put(`/cms/financeiro/alunos/${aluno.id}/competencias/${competencia.valor}`);
+        form.put(`/cms/financeiro/colaboradores/${colaborador.id}/competencias/${competencia.valor}`);
     };
 
     return (
         <CMSLayout>
-            <Head title={`Financeiro - ${aluno?.name} (${competencia?.valor})`} />
+            <Head title={`Financeiro - ${colaborador?.name} (${competencia?.valor})`} />
 
             <div className="space-y-6 animate-fadeIn">
                 <FinanceiroTabs tabs={tabs} className="justify-start md:justify-end" />
                 <div className="flex flex-col gap-2">
                     <Link
-                        href={`/cms/financeiro/alunos/${aluno.id}`}
+                        href={`/cms/financeiro/colaboradores/${colaborador.id}`}
                         className="text-sm text-muted-foreground hover:text-foreground"
                     >
-                        ← Voltar para {aluno?.name}
+                        ← Voltar para {colaborador?.name}
                     </Link>
                     <h1 className="text-3xl font-bold text-foreground dark:text-foreground">{competencia?.label}</h1>
                     <p className="text-sm text-muted-foreground">
-                        Atualize as informações financeiras desta competência mensal do aluno.
+                        Atualize as informações financeiras desta competência mensal do colaborador.
                     </p>
                 </div>
 
@@ -67,8 +67,8 @@ export default function Competencia({ aluno, competencia, registro = {}, statusO
                     <div className="lg:col-span-2 space-y-6">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Detalhes da mensalidade</CardTitle>
-                                <CardDescription>Valores e datas desta competência</CardDescription>
+                                <CardTitle>Detalhes da competência</CardTitle>
+                                <CardDescription>Valores previstos e datas deste lançamento</CardDescription>
                             </CardHeader>
                             <CardContent className="grid gap-6 md:grid-cols-2">
                                 <div className="space-y-2">
@@ -88,16 +88,16 @@ export default function Competencia({ aluno, competencia, registro = {}, statusO
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="data_vencimento">Data de vencimento</Label>
+                                    <Label htmlFor="data_prevista">Data prevista</Label>
                                     <Input
-                                        id="data_vencimento"
+                                        id="data_prevista"
                                         type="date"
-                                        value={form.data.data_vencimento}
-                                        onChange={(event) => form.setData('data_vencimento', event.target.value)}
-                                        className={form.errors.data_vencimento ? 'border-red-500' : ''}
+                                        value={form.data.data_prevista}
+                                        onChange={(event) => form.setData('data_prevista', event.target.value)}
+                                        className={form.errors.data_prevista ? 'border-red-500' : ''}
                                     />
-                                    {form.errors.data_vencimento && (
-                                        <p className="text-sm text-red-600">{form.errors.data_vencimento}</p>
+                                    {form.errors.data_prevista && (
+                                        <p className="text-sm text-red-600">{form.errors.data_prevista}</p>
                                     )}
                                 </div>
 
@@ -136,7 +136,7 @@ export default function Competencia({ aluno, competencia, registro = {}, statusO
                         <Card>
                             <CardHeader>
                                 <CardTitle>Informações adicionais</CardTitle>
-                                <CardDescription>Complementos e observações da cobrança</CardDescription>
+                                <CardDescription>Complementos e observações do pagamento</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 <div className="space-y-2">
@@ -145,7 +145,7 @@ export default function Competencia({ aluno, competencia, registro = {}, statusO
                                         id="metodo"
                                         value={form.data.metodo}
                                         onChange={(event) => form.setData('metodo', event.target.value)}
-                                        placeholder="Ex.: Pix, cartão, dinheiro"
+                                        placeholder="Ex.: Pix, transferência, dinheiro"
                                         className={form.errors.metodo ? 'border-red-500' : ''}
                                     />
                                     {form.errors.metodo && (
@@ -163,7 +163,7 @@ export default function Competencia({ aluno, competencia, registro = {}, statusO
                                         className={`flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
                                             form.errors.observacao ? 'border-red-500' : ''
                                         }`}
-                                        placeholder="Registre observações relevantes, como descontos ou acordos."
+                                        placeholder="Registre observações relevantes, como acordos ou descontos."
                                     />
                                     {form.errors.observacao && (
                                         <p className="text-sm text-red-600">{form.errors.observacao}</p>
@@ -177,7 +177,7 @@ export default function Competencia({ aluno, competencia, registro = {}, statusO
                         <Card>
                             <CardHeader>
                                 <CardTitle>Status da competência</CardTitle>
-                                <CardDescription>Defina a situação atual desta mensalidade</CardDescription>
+                                <CardDescription>Defina a situação atual deste lançamento</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="space-y-2">
@@ -202,11 +202,12 @@ export default function Competencia({ aluno, competencia, registro = {}, statusO
                                     )}
                                 </div>
 
-                                <div className="border-t border-border pt-4">
-                                    <Button type="submit" className="w-full" disabled={form.processing}>
-                                        {form.processing ? 'Salvando...' : 'Salvar alterações'}
-                                    </Button>
-                                </div>
+                                <Button type="submit" className="w-full" disabled={form.processing}>
+                                    {form.processing ? 'Salvando...' : 'Salvar alterações'}
+                                </Button>
+                                {form.recentlySuccessful && (
+                                    <p className="text-sm text-green-600">Alterações salvas com sucesso!</p>
+                                )}
                             </CardContent>
                         </Card>
                     </div>

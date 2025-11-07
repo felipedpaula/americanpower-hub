@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\CMS\AuthController as CMSAuthController;
 use App\Http\Controllers\CMS\FinanceiroAlunoController;
+use App\Http\Controllers\CMS\FinanceiroColaboradorController;
+use App\Http\Controllers\CMS\FinanceiroProfessorController;
 use App\Http\Controllers\CMS\SettingController;
 use App\Http\Controllers\CMS\TurmaController;
 use App\Http\Controllers\CMS\UsuarioController;
@@ -51,9 +53,27 @@ Route::prefix('cms')->name('cms.')->group(function () {
             Route::resource('usuarios', UsuarioController::class)->except(['show']);
             Route::prefix('financeiro')->name('financeiro.')->group(function () {
                 Route::get('/', [FinanceiroAlunoController::class, 'index'])->name('index');
-                Route::get('/alunos/{aluno}', [FinanceiroAlunoController::class, 'show'])->name('alunos.show');
-                Route::get('/alunos/{aluno}/competencias/{competencia}', [FinanceiroAlunoController::class, 'showCompetencia'])->name('alunos.competencias.show');
-                Route::put('/alunos/{aluno}/competencias/{competencia}', [FinanceiroAlunoController::class, 'updateCompetencia'])->name('alunos.competencias.update');
+
+                Route::prefix('alunos')->name('alunos.')->group(function () {
+                    Route::get('/', fn () => redirect()->route('cms.financeiro.index'));
+                    Route::get('/{aluno}', [FinanceiroAlunoController::class, 'show'])->name('show');
+                    Route::get('/{aluno}/competencias/{competencia}', [FinanceiroAlunoController::class, 'showCompetencia'])->name('competencias.show');
+                    Route::put('/{aluno}/competencias/{competencia}', [FinanceiroAlunoController::class, 'updateCompetencia'])->name('competencias.update');
+                });
+
+                Route::prefix('professores')->name('professores.')->group(function () {
+                    Route::get('/', [FinanceiroProfessorController::class, 'index'])->name('index');
+                    Route::get('/{professor}', [FinanceiroProfessorController::class, 'show'])->name('show');
+                    Route::get('/{professor}/competencias/{competencia}', [FinanceiroProfessorController::class, 'showCompetencia'])->name('competencias.show');
+                    Route::put('/{professor}/competencias/{competencia}', [FinanceiroProfessorController::class, 'updateCompetencia'])->name('competencias.update');
+                });
+
+                Route::prefix('colaboradores')->name('colaboradores.')->middleware('check.root')->group(function () {
+                    Route::get('/', [FinanceiroColaboradorController::class, 'index'])->name('index');
+                    Route::get('/{colaborador}', [FinanceiroColaboradorController::class, 'show'])->name('show');
+                    Route::get('/{colaborador}/competencias/{competencia}', [FinanceiroColaboradorController::class, 'showCompetencia'])->name('competencias.show');
+                    Route::put('/{colaborador}/competencias/{competencia}', [FinanceiroColaboradorController::class, 'updateCompetencia'])->name('competencias.update');
+                });
             });
         });
     });

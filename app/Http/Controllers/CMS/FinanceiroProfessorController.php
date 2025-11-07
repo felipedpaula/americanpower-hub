@@ -3,19 +3,17 @@
 namespace App\Http\Controllers\CMS;
 
 use App\Http\Controllers\Controller;
-use App\Models\FinanceiroAluno;
-use App\Models\TurmaCriada;
+use App\Models\FinanceiroProfessor;
 use App\Models\User;
 use App\Support\Financeiro\FinanceiroTabs;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class FinanceiroAlunoController extends Controller
+class FinanceiroProfessorController extends Controller
 {
     private const STATUS_LABELS = [
         'aberto' => 'Em aberto',
@@ -26,27 +24,25 @@ class FinanceiroAlunoController extends Controller
 
     public function index(): Response
     {
-        $alunos = User::with('userType')
-            ->whereHas('userType', fn ($query) => $query->where('name', 'aluno'))
+        $professores = User::with('userType')
+            ->whereHas('userType', fn ($query) => $query->where('name', 'professor'))
             ->orderBy('name')
             ->get();
 
-        $turmas = TurmaCriada::with('turma')->get();
-        $financeirosPorAluno = FinanceiroAluno::whereIn('aluno_id', $alunos->pluck('id'))
+        $financeirosPorProfessor = FinanceiroProfessor::whereIn('professor_id', $professores->pluck('id'))
             ->get()
-            ->groupBy('aluno_id');
+            ->groupBy('professor_id');
 
-        $alunosFormatados = $alunos->map(function (User $aluno) use ($turmas, $financeirosPorAluno) {
-            $turma = $this->buscarTurmaDoAluno($turmas, $aluno->id);
-            $registrosFinanceiros = $financeirosPorAluno->get($aluno->id, collect());
+        $professoresFormatados = $professores->map(function (User $professor) use ($financeirosPorProfessor) {
+            $registrosFinanceiros = $financeirosPorProfessor->get($professor->id, collect());
 
-            $temAtraso = $registrosFinanceiros->contains(function (FinanceiroAluno $registro) {
+            $temAtraso = $registrosFinanceiros->contains(function (FinanceiroProfessor $registro) {
                 if ($registro->status === 'atrasado') {
                     return true;
                 }
 
-                if ($registro->status === 'aberto' && $registro->data_vencimento && !$registro->valor_pago) {
-                    return Carbon::parse($registro->data_vencimento)->isPast();
+                if ($registro->status === 'aberto' && $registro->data_prevista && !$registro->valor_pago) {
+                    return Carbon::parse($registro->data_prevista)->isPast();
                 }
 
                 return false;
@@ -57,16 +53,11 @@ class FinanceiroAlunoController extends Controller
                 : ($temAtraso ? 'atrasado' : 'em_dia');
 
             return [
-                'id' => $aluno->id,
-                'name' => $aluno->name,
-                'email' => $aluno->email,
-                'status' => $aluno->status ? 'ativo' : 'inativo',
-                'status_label' => $aluno->status ? 'Ativo' : 'Inativo',
-                'turma' => $turma ? [
-                    'id' => $turma->id,
-                    'nome' => $turma->turma?->nome,
-                    'status' => $turma->status,
-                ] : null,
+                'id' => $professor->id,
+                'name' => $professor->name,
+                'email' => $professor->email,
+                'status' => $professor->status ? 'ativo' : 'inativo',
+                'status_label' => $professor->status ? 'Ativo' : 'Inativo',
                 'financeiro_status' => $financeiroStatus,
                 'financeiro_status_label' => match ($financeiroStatus) {
                     'atrasado' => 'Com pendências',
@@ -81,19 +72,19 @@ class FinanceiroAlunoController extends Controller
             ];
         })->values();
 
-        return Inertia::render('CMS/Financeiro/Index', [
-            'alunos' => $alunosFormatados,
-            'tabs' => FinanceiroTabs::build(auth()->user(), 'alunos'),
+        return Inertia::render('CMS/Financeiro/Professores/Index', [
+            'professores' => $professoresFormatados,
+            'tabs' => FinanceiroTabs::build(auth()->user(), 'professores'),
         ]);
     }
 
-    public function show(Request $request, User $aluno): Response
+    public function show(Request $request, User $professor): Response
     {
-        $this->assertAluno($aluno);
+        $this->assertProfessor($professor);
 
         $anoAtual = (int) $request->query('ano', now()->year);
 
-        $financeiros = FinanceiroAluno::where('aluno_id', $aluno->id)->get();
+        $financeiros = FinanceiroProfessor::where('professor_id', $professor->id)->get();
         $anosDisponiveis = $financeiros->pluck('competencia')
             ->filter()
             ->map(fn ($competencia) => (int) substr($competencia, 0, 4))
@@ -109,7 +100,7 @@ class FinanceiroAlunoController extends Controller
             $anosDisponiveis = $anosDisponiveis->unique()->sort()->values();
         }
 
-        $registrosAno = $financeiros->filter(function (FinanceiroAluno $registro) use ($anoAtual) {
+        $registrosAno = $financeiros->filter(function (FinanceiroProfessor $registro) use ($anoAtual) {
             return str_starts_with($registro->competencia, $anoAtual . '-');
         });
 
@@ -134,18 +125,18 @@ class FinanceiroAlunoController extends Controller
                     : (self::STATUS_LABELS[$status] ?? ucfirst($status)),
                 'valor_previsto' => $registro?->valor_previsto,
                 'valor_pago' => $registro?->valor_pago,
-                'data_vencimento' => optional($registro?->data_vencimento)->format('Y-m-d'),
+                'data_prevista' => optional($registro?->data_prevista)->format('Y-m-d'),
                 'data_pagamento' => optional($registro?->data_pagamento)->format('Y-m-d'),
             ];
         })->values();
 
-        $temAtraso = $financeiros->contains(function (FinanceiroAluno $registro) {
+        $temAtraso = $financeiros->contains(function (FinanceiroProfessor $registro) {
             if ($registro->status === 'atrasado') {
                 return true;
             }
 
-            if ($registro->status === 'aberto' && $registro->data_vencimento && !$registro->valor_pago) {
-                return Carbon::parse($registro->data_vencimento)->isPast();
+            if ($registro->status === 'aberto' && $registro->data_prevista && !$registro->valor_pago) {
+                return Carbon::parse($registro->data_prevista)->isPast();
             }
 
             return false;
@@ -154,8 +145,8 @@ class FinanceiroAlunoController extends Controller
         $resumo = [
             'situacao' => $temAtraso ? 'atrasado' : 'em_dia',
             'mensagem' => $temAtraso
-                ? 'O aluno possui mensalidades em atraso ou pendentes.'
-                : 'Todas as mensalidades registradas estão em dia.',
+                ? 'Existem pagamentos previstos em atraso ou pendentes.'
+                : 'Todos os lançamentos registrados estão em dia.',
             'totais' => [
                 'previsto' => (float) $financeiros->sum('valor_previsto'),
                 'pago' => (float) $financeiros->sum('valor_pago'),
@@ -169,43 +160,36 @@ class FinanceiroAlunoController extends Controller
             ],
         ];
 
-        $turma = $this->buscarTurmaDoAluno(TurmaCriada::with('turma')->get(), $aluno->id);
-
-        return Inertia::render('CMS/Financeiro/Show', [
-            'aluno' => [
-                'id' => $aluno->id,
-                'name' => $aluno->name,
-                'email' => $aluno->email,
-                'status' => $aluno->status ? 'ativo' : 'inativo',
-                'status_label' => $aluno->status ? 'Ativo' : 'Inativo',
-                'turma' => $turma ? [
-                    'id' => $turma->id,
-                    'nome' => $turma->turma?->nome,
-                    'status' => $turma->status,
-                ] : null,
+        return Inertia::render('CMS/Financeiro/Professores/Show', [
+            'professor' => [
+                'id' => $professor->id,
+                'name' => $professor->name,
+                'email' => $professor->email,
+                'status' => $professor->status ? 'ativo' : 'inativo',
+                'status_label' => $professor->status ? 'Ativo' : 'Inativo',
             ],
             'resumo' => $resumo,
             'anoAtual' => $anoAtual,
             'anosDisponiveis' => $anosDisponiveis,
             'meses' => $meses,
             'statusOptions' => $this->getStatusOptions(),
-            'tabs' => FinanceiroTabs::build(auth()->user(), 'alunos'),
+            'tabs' => FinanceiroTabs::build(auth()->user(), 'professores'),
         ]);
     }
 
-    public function showCompetencia(User $aluno, string $competencia): Response
+    public function showCompetencia(User $professor, string $competencia): Response
     {
-        $this->assertAluno($aluno);
+        $this->assertProfessor($professor);
         $competenciaCarbon = $this->parseCompetencia($competencia);
 
-        $registro = FinanceiroAluno::where('aluno_id', $aluno->id)
+        $registro = FinanceiroProfessor::where('professor_id', $professor->id)
             ->where('competencia', $competencia)
             ->first();
 
-        return Inertia::render('CMS/Financeiro/Competencia', [
-            'aluno' => [
-                'id' => $aluno->id,
-                'name' => $aluno->name,
+        return Inertia::render('CMS/Financeiro/Professores/Competencia', [
+            'professor' => [
+                'id' => $professor->id,
+                'name' => $professor->name,
             ],
             'competencia' => [
                 'valor' => $competencia,
@@ -214,7 +198,7 @@ class FinanceiroAlunoController extends Controller
             'registro' => $registro ? [
                 'id' => $registro->id,
                 'valor_previsto' => $registro->valor_previsto,
-                'data_vencimento' => optional($registro->data_vencimento)->format('Y-m-d'),
+                'data_prevista' => optional($registro->data_prevista)->format('Y-m-d'),
                 'valor_pago' => $registro->valor_pago,
                 'data_pagamento' => optional($registro->data_pagamento)->format('Y-m-d'),
                 'metodo' => $registro->metodo,
@@ -224,18 +208,18 @@ class FinanceiroAlunoController extends Controller
                 'status' => 'aberto',
             ],
             'statusOptions' => $this->getStatusOptions(),
-            'tabs' => FinanceiroTabs::build(auth()->user(), 'alunos'),
+            'tabs' => FinanceiroTabs::build(auth()->user(), 'professores'),
         ]);
     }
 
-    public function updateCompetencia(Request $request, User $aluno, string $competencia): RedirectResponse
+    public function updateCompetencia(Request $request, User $professor, string $competencia): RedirectResponse
     {
-        $this->assertAluno($aluno);
+        $this->assertProfessor($professor);
         $competenciaCarbon = $this->parseCompetencia($competencia);
 
         $validated = $request->validate([
             'valor_previsto' => ['nullable', 'numeric', 'min:0'],
-            'data_vencimento' => ['nullable', 'date'],
+            'data_prevista' => ['nullable', 'date'],
             'valor_pago' => ['nullable', 'numeric', 'min:0'],
             'data_pagamento' => ['nullable', 'date'],
             'metodo' => ['nullable', 'string', 'max:255'],
@@ -243,40 +227,28 @@ class FinanceiroAlunoController extends Controller
             'observacao' => ['nullable', 'string'],
         ]);
 
-        FinanceiroAluno::updateOrCreate(
+        FinanceiroProfessor::updateOrCreate(
             [
-                'aluno_id' => $aluno->id,
+                'professor_id' => $professor->id,
                 'competencia' => $competenciaCarbon->format('Y-m'),
             ],
             $validated
         );
 
         return redirect()
-            ->route('cms.financeiro.alunos.competencias.show', [$aluno->id, $competenciaCarbon->format('Y-m')])
+            ->route('cms.financeiro.professores.competencias.show', [$professor->id, $competenciaCarbon->format('Y-m')])
             ->with('success', 'Informações financeiras atualizadas com sucesso.');
     }
 
-    private function assertAluno(User $aluno): void
+    private function assertProfessor(User $professor): void
     {
-        if (!$aluno->relationLoaded('userType')) {
-            $aluno->load('userType');
+        if (!$professor->relationLoaded('userType')) {
+            $professor->load('userType');
         }
 
-        if (!$aluno->userType || $aluno->userType->name !== 'aluno') {
+        if (!$professor->userType || $professor->userType->name !== 'professor') {
             abort(404);
         }
-    }
-
-    private function buscarTurmaDoAluno(Collection $turmas, int $alunoId): ?TurmaCriada
-    {
-        return $turmas->first(function (TurmaCriada $turma) use ($alunoId) {
-            $alunosTurma = collect($turma->alunos ?? [])
-                ->map(fn ($id) => (int) $id)
-                ->filter()
-                ->values();
-
-            return $alunosTurma->contains($alunoId);
-        });
     }
 
     private function getStatusOptions(): array
