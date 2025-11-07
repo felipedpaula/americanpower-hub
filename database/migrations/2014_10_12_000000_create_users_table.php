@@ -20,6 +20,10 @@ return new class extends Migration
             $table->unsignedBigInteger('user_type_id');
             $table->foreign('user_type_id')->references('id')->on('user_types');
             $table->rememberToken();
+            $table->string('cpf', 11)->unique();
+            $table->string('telefone', 15)->nullable();
+            $table->date('data_nasc')->nullable();
+            $table->boolean('status')->default(true);
             $table->timestamps();
         });
     }
