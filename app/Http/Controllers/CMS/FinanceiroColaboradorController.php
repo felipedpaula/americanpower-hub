@@ -3,19 +3,17 @@
 namespace App\Http\Controllers\CMS;
 
 use App\Http\Controllers\Controller;
-use App\Models\FinanceiroAluno;
-use App\Models\TurmaCriada;
+use App\Models\FinanceiroColaborador;
 use App\Models\User;
 use App\Support\Financeiro\FinanceiroTabs;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class FinanceiroAlunoController extends Controller
+class FinanceiroColaboradorController extends Controller
 {
     private const STATUS_LABELS = [
         'aberto' => 'Em aberto',
@@ -26,27 +24,27 @@ class FinanceiroAlunoController extends Controller
 
     public function index(): Response
     {
-        $alunos = User::with('userType')
-            ->whereHas('userType', fn ($query) => $query->where('name', 'aluno'))
+        $this->assertRootAccess();
+
+        $colaboradores = User::with('userType')
+            ->whereHas('userType', fn ($query) => $query->where('name', 'colaborador'))
             ->orderBy('name')
             ->get();
 
-        $turmas = TurmaCriada::with('turma')->get();
-        $financeirosPorAluno = FinanceiroAluno::whereIn('aluno_id', $alunos->pluck('id'))
+        $financeirosPorColaborador = FinanceiroColaborador::whereIn('colaborador_id', $colaboradores->pluck('id'))
             ->get()
-            ->groupBy('aluno_id');
+            ->groupBy('colaborador_id');
 
-        $alunosFormatados = $alunos->map(function (User $aluno) use ($turmas, $financeirosPorAluno) {
-            $turma = $this->buscarTurmaDoAluno($turmas, $aluno->id);
-            $registrosFinanceiros = $financeirosPorAluno->get($aluno->id, collect());
+        $colaboradoresFormatados = $colaboradores->map(function (User $colaborador) use ($financeirosPorColaborador) {
+            $registrosFinanceiros = $financeirosPorColaborador->get($colaborador->id, collect());
 
-            $temAtraso = $registrosFinanceiros->contains(function (FinanceiroAluno $registro) {
+            $temAtraso = $registrosFinanceiros->contains(function (FinanceiroColaborador $registro) {
                 if ($registro->status === 'atrasado') {
                     return true;
                 }
 
-                if ($registro->status === 'aberto' && $registro->data_vencimento && !$registro->valor_pago) {
-                    return Carbon::parse($registro->data_vencimento)->isPast();
+                if ($registro->status === 'aberto' && $registro->data_prevista && !$registro->valor_pago) {
+                    return Carbon::parse($registro->data_prevista)->isPast();
                 }
 
                 return false;
@@ -57,16 +55,11 @@ class FinanceiroAlunoController extends Controller
                 : ($temAtraso ? 'atrasado' : 'em_dia');
 
             return [
-                'id' => $aluno->id,
-                'name' => $aluno->name,
-                'email' => $aluno->email,
-                'status' => $aluno->status ? 'ativo' : 'inativo',
-                'status_label' => $aluno->status ? 'Ativo' : 'Inativo',
-                'turma' => $turma ? [
-                    'id' => $turma->id,
-                    'nome' => $turma->turma?->nome,
-                    'status' => $turma->status,
-                ] : null,
+                'id' => $colaborador->id,
+                'name' => $colaborador->name,
+                'email' => $colaborador->email,
+                'status' => $colaborador->status ? 'ativo' : 'inativo',
+                'status_label' => $colaborador->status ? 'Ativo' : 'Inativo',
                 'financeiro_status' => $financeiroStatus,
                 'financeiro_status_label' => match ($financeiroStatus) {
                     'atrasado' => 'Com pendências',
@@ -81,19 +74,20 @@ class FinanceiroAlunoController extends Controller
             ];
         })->values();
 
-        return Inertia::render('CMS/Financeiro/Index', [
-            'alunos' => $alunosFormatados,
-            'tabs' => FinanceiroTabs::build(auth()->user(), 'alunos'),
+        return Inertia::render('CMS/Financeiro/Colaboradores/Index', [
+            'colaboradores' => $colaboradoresFormatados,
+            'tabs' => FinanceiroTabs::build(auth()->user(), 'colaboradores'),
         ]);
     }
 
-    public function show(Request $request, User $aluno): Response
+    public function show(Request $request, User $colaborador): Response
     {
-        $this->assertAluno($aluno);
+        $this->assertRootAccess();
+        $this->assertColaborador($colaborador);
 
         $anoAtual = (int) $request->query('ano', now()->year);
 
-        $financeiros = FinanceiroAluno::where('aluno_id', $aluno->id)->get();
+        $financeiros = FinanceiroColaborador::where('colaborador_id', $colaborador->id)->get();
         $anosDisponiveis = $financeiros->pluck('competencia')
             ->filter()
             ->map(fn ($competencia) => (int) substr($competencia, 0, 4))
@@ -109,7 +103,7 @@ class FinanceiroAlunoController extends Controller
             $anosDisponiveis = $anosDisponiveis->unique()->sort()->values();
         }
 
-        $registrosAno = $financeiros->filter(function (FinanceiroAluno $registro) use ($anoAtual) {
+        $registrosAno = $financeiros->filter(function (FinanceiroColaborador $registro) use ($anoAtual) {
             return str_starts_with($registro->competencia, $anoAtual . '-');
         });
 
@@ -134,18 +128,18 @@ class FinanceiroAlunoController extends Controller
                     : (self::STATUS_LABELS[$status] ?? ucfirst($status)),
                 'valor_previsto' => $registro?->valor_previsto,
                 'valor_pago' => $registro?->valor_pago,
-                'data_vencimento' => optional($registro?->data_vencimento)->format('Y-m-d'),
+                'data_prevista' => optional($registro?->data_prevista)->format('Y-m-d'),
                 'data_pagamento' => optional($registro?->data_pagamento)->format('Y-m-d'),
             ];
         })->values();
 
-        $temAtraso = $financeiros->contains(function (FinanceiroAluno $registro) {
+        $temAtraso = $financeiros->contains(function (FinanceiroColaborador $registro) {
             if ($registro->status === 'atrasado') {
                 return true;
             }
 
-            if ($registro->status === 'aberto' && $registro->data_vencimento && !$registro->valor_pago) {
-                return Carbon::parse($registro->data_vencimento)->isPast();
+            if ($registro->status === 'aberto' && $registro->data_prevista && !$registro->valor_pago) {
+                return Carbon::parse($registro->data_prevista)->isPast();
             }
 
             return false;
@@ -154,8 +148,8 @@ class FinanceiroAlunoController extends Controller
         $resumo = [
             'situacao' => $temAtraso ? 'atrasado' : 'em_dia',
             'mensagem' => $temAtraso
-                ? 'O aluno possui mensalidades em atraso ou pendentes.'
-                : 'Todas as mensalidades registradas estão em dia.',
+                ? 'Existem pagamentos previstos em atraso ou pendentes.'
+                : 'Todos os lançamentos registrados estão em dia.',
             'totais' => [
                 'previsto' => (float) $financeiros->sum('valor_previsto'),
                 'pago' => (float) $financeiros->sum('valor_pago'),
@@ -169,43 +163,37 @@ class FinanceiroAlunoController extends Controller
             ],
         ];
 
-        $turma = $this->buscarTurmaDoAluno(TurmaCriada::with('turma')->get(), $aluno->id);
-
-        return Inertia::render('CMS/Financeiro/Show', [
-            'aluno' => [
-                'id' => $aluno->id,
-                'name' => $aluno->name,
-                'email' => $aluno->email,
-                'status' => $aluno->status ? 'ativo' : 'inativo',
-                'status_label' => $aluno->status ? 'Ativo' : 'Inativo',
-                'turma' => $turma ? [
-                    'id' => $turma->id,
-                    'nome' => $turma->turma?->nome,
-                    'status' => $turma->status,
-                ] : null,
+        return Inertia::render('CMS/Financeiro/Colaboradores/Show', [
+            'colaborador' => [
+                'id' => $colaborador->id,
+                'name' => $colaborador->name,
+                'email' => $colaborador->email,
+                'status' => $colaborador->status ? 'ativo' : 'inativo',
+                'status_label' => $colaborador->status ? 'Ativo' : 'Inativo',
             ],
             'resumo' => $resumo,
             'anoAtual' => $anoAtual,
             'anosDisponiveis' => $anosDisponiveis,
             'meses' => $meses,
             'statusOptions' => $this->getStatusOptions(),
-            'tabs' => FinanceiroTabs::build(auth()->user(), 'alunos'),
+            'tabs' => FinanceiroTabs::build(auth()->user(), 'colaboradores'),
         ]);
     }
 
-    public function showCompetencia(User $aluno, string $competencia): Response
+    public function showCompetencia(User $colaborador, string $competencia): Response
     {
-        $this->assertAluno($aluno);
+        $this->assertRootAccess();
+        $this->assertColaborador($colaborador);
         $competenciaCarbon = $this->parseCompetencia($competencia);
 
-        $registro = FinanceiroAluno::where('aluno_id', $aluno->id)
+        $registro = FinanceiroColaborador::where('colaborador_id', $colaborador->id)
             ->where('competencia', $competencia)
             ->first();
 
-        return Inertia::render('CMS/Financeiro/Competencia', [
-            'aluno' => [
-                'id' => $aluno->id,
-                'name' => $aluno->name,
+        return Inertia::render('CMS/Financeiro/Colaboradores/Competencia', [
+            'colaborador' => [
+                'id' => $colaborador->id,
+                'name' => $colaborador->name,
             ],
             'competencia' => [
                 'valor' => $competencia,
@@ -214,7 +202,7 @@ class FinanceiroAlunoController extends Controller
             'registro' => $registro ? [
                 'id' => $registro->id,
                 'valor_previsto' => $registro->valor_previsto,
-                'data_vencimento' => optional($registro->data_vencimento)->format('Y-m-d'),
+                'data_prevista' => optional($registro->data_prevista)->format('Y-m-d'),
                 'valor_pago' => $registro->valor_pago,
                 'data_pagamento' => optional($registro->data_pagamento)->format('Y-m-d'),
                 'metodo' => $registro->metodo,
@@ -224,18 +212,19 @@ class FinanceiroAlunoController extends Controller
                 'status' => 'aberto',
             ],
             'statusOptions' => $this->getStatusOptions(),
-            'tabs' => FinanceiroTabs::build(auth()->user(), 'alunos'),
+            'tabs' => FinanceiroTabs::build(auth()->user(), 'colaboradores'),
         ]);
     }
 
-    public function updateCompetencia(Request $request, User $aluno, string $competencia): RedirectResponse
+    public function updateCompetencia(Request $request, User $colaborador, string $competencia): RedirectResponse
     {
-        $this->assertAluno($aluno);
+        $this->assertRootAccess();
+        $this->assertColaborador($colaborador);
         $competenciaCarbon = $this->parseCompetencia($competencia);
 
         $validated = $request->validate([
             'valor_previsto' => ['nullable', 'numeric', 'min:0'],
-            'data_vencimento' => ['nullable', 'date'],
+            'data_prevista' => ['nullable', 'date'],
             'valor_pago' => ['nullable', 'numeric', 'min:0'],
             'data_pagamento' => ['nullable', 'date'],
             'metodo' => ['nullable', 'string', 'max:255'],
@@ -243,40 +232,37 @@ class FinanceiroAlunoController extends Controller
             'observacao' => ['nullable', 'string'],
         ]);
 
-        FinanceiroAluno::updateOrCreate(
+        FinanceiroColaborador::updateOrCreate(
             [
-                'aluno_id' => $aluno->id,
+                'colaborador_id' => $colaborador->id,
                 'competencia' => $competenciaCarbon->format('Y-m'),
             ],
             $validated
         );
 
         return redirect()
-            ->route('cms.financeiro.alunos.competencias.show', [$aluno->id, $competenciaCarbon->format('Y-m')])
+            ->route('cms.financeiro.colaboradores.competencias.show', [$colaborador->id, $competenciaCarbon->format('Y-m')])
             ->with('success', 'Informações financeiras atualizadas com sucesso.');
     }
 
-    private function assertAluno(User $aluno): void
+    private function assertColaborador(User $colaborador): void
     {
-        if (!$aluno->relationLoaded('userType')) {
-            $aluno->load('userType');
+        if (!$colaborador->relationLoaded('userType')) {
+            $colaborador->load('userType');
         }
 
-        if (!$aluno->userType || $aluno->userType->name !== 'aluno') {
+        if (!$colaborador->userType || $colaborador->userType->name !== 'colaborador') {
             abort(404);
         }
     }
 
-    private function buscarTurmaDoAluno(Collection $turmas, int $alunoId): ?TurmaCriada
+    private function assertRootAccess(): void
     {
-        return $turmas->first(function (TurmaCriada $turma) use ($alunoId) {
-            $alunosTurma = collect($turma->alunos ?? [])
-                ->map(fn ($id) => (int) $id)
-                ->filter()
-                ->values();
+        $user = auth()->user();
 
-            return $alunosTurma->contains($alunoId);
-        });
+        if (!$user || $user->userType?->name !== 'root') {
+            abort(403, 'Acesso permitido apenas para usuários root.');
+        }
     }
 
     private function getStatusOptions(): array

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import FinanceiroTabs from './components/Tabs';
+import FinanceiroTabs from '../components/Tabs';
 
 const FINANCEIRO_STATUS_VARIANTS = {
     em_dia: 'success',
@@ -31,34 +31,33 @@ function FinanceiroBadge({ status, label }) {
     );
 }
 
-export default function Index({ alunos = [], tabs = [] }) {
+export default function Index({ professores = [], tabs = [] }) {
     const [searchTerm, setSearchTerm] = useState('');
 
-    const filteredAlunos = useMemo(() => {
+    const filteredProfessores = useMemo(() => {
         if (!searchTerm.trim()) {
-            return alunos;
+            return professores;
         }
 
-        return alunos.filter((aluno) => {
-            const termo = searchTerm.toLowerCase();
+        const termo = searchTerm.toLowerCase();
+        return professores.filter((professor) => {
             return (
-                aluno.name?.toLowerCase().includes(termo) ||
-                aluno.email?.toLowerCase().includes(termo) ||
-                aluno.turma?.nome?.toLowerCase().includes(termo)
+                professor.name?.toLowerCase().includes(termo) ||
+                professor.email?.toLowerCase().includes(termo)
             );
         });
-    }, [alunos, searchTerm]);
+    }, [professores, searchTerm]);
 
     return (
         <CMSLayout>
-            <Head title="Financeiro - Alunos" />
+            <Head title="Financeiro - Professores" />
 
             <div className="space-y-6 animate-fadeIn">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-foreground dark:text-foreground">Financeiro</h1>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Gerencie as mensalidades dos alunos e acompanhe pendências financeiras
+                            Gerencie os pagamentos de professores e acompanhe lançamentos mensais.
                         </p>
                     </div>
                     <FinanceiroTabs tabs={tabs} />
@@ -66,22 +65,22 @@ export default function Index({ alunos = [], tabs = [] }) {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Alunos matriculados</CardTitle>
+                        <CardTitle>Professores cadastrados</CardTitle>
                         <CardDescription>
-                            Visualize rapidamente a situação financeira de cada estudante e acesse detalhes mensais
+                            Visualize rapidamente a situação financeira de cada professor e registre pagamentos mensais.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <Input
                                 type="text"
-                                placeholder="Buscar por nome, email ou turma..."
+                                placeholder="Buscar por nome ou email..."
                                 value={searchTerm}
                                 onChange={(event) => setSearchTerm(event.target.value)}
                                 className="md:max-w-sm"
                             />
                             <div className="text-sm text-muted-foreground">
-                                {filteredAlunos.length} de {alunos.length} alunos exibidos
+                                {filteredProfessores.length} de {professores.length} professores exibidos
                             </div>
                         </div>
 
@@ -89,61 +88,46 @@ export default function Index({ alunos = [], tabs = [] }) {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Aluno</TableHead>
+                                        <TableHead>Professor</TableHead>
                                         <TableHead>Status</TableHead>
-                                        <TableHead>Turma</TableHead>
                                         <TableHead>Situação Financeira</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredAlunos.length === 0 ? (
+                                    {filteredProfessores.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                                                Nenhum aluno encontrado com os filtros selecionados.
+                                            <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                                                Nenhum professor encontrado com os filtros selecionados.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        filteredAlunos.map((aluno) => (
-                                            <TableRow key={aluno.id}>
+                                        filteredProfessores.map((professor) => (
+                                            <TableRow key={professor.id}>
                                                 <TableCell className="space-y-1">
                                                     <div className="font-semibold text-foreground dark:text-foreground">
-                                                        {aluno.name}
+                                                        {professor.name}
                                                     </div>
-                                                    <div className="text-xs text-muted-foreground">{aluno.email}</div>
+                                                    <div className="text-xs text-muted-foreground">{professor.email}</div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={aluno.status === 'ativo' ? 'default' : 'secondary'}>
-                                                        {aluno.status_label}
+                                                    <Badge variant={professor.status === 'ativo' ? 'default' : 'secondary'}>
+                                                        {professor.status_label}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell>
-                                                    {aluno.turma ? (
-                                                        <div className="space-y-1">
-                                                            <div className="font-medium">{aluno.turma.nome}</div>
-                                                            <div className="text-xs text-muted-foreground">
-                                                                {aluno.turma.status === 'em andamento'
-                                                                    ? 'Turma ativa'
-                                                                    : aluno.turma.status}
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-sm text-muted-foreground">Sem turma vinculada</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
                                                     <FinanceiroBadge
-                                                        status={aluno.financeiro_status}
-                                                        label={aluno.financeiro_status_label}
+                                                        status={professor.financeiro_status}
+                                                        label={professor.financeiro_status_label}
                                                     />
                                                     <div className="mt-1 text-xs text-muted-foreground">
-                                                        {aluno.resumo.atrasados > 0
-                                                            ? `${aluno.resumo.atrasados} mês(es) em atraso`
-                                                            : `${aluno.resumo.pagos} mês(es) pagos`}
+                                                        {professor.resumo.atrasados > 0
+                                                            ? `${professor.resumo.atrasados} mês(es) em atraso`
+                                                            : `${professor.resumo.pagos} mês(es) pagos`}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <Link href={`/cms/financeiro/alunos/${aluno.id}`}>
+                                                    <Link href={`/cms/financeiro/professores/${professor.id}`}>
                                                         <Button variant="outline" size="sm">
                                                             Visualizar
                                                         </Button>
