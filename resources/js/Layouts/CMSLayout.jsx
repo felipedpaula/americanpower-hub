@@ -21,6 +21,7 @@ export default function CMSLayout({ children }) {
     const navigation = [
         { name: 'Dashboard', href: '/cms/dashboard', icon: '📊' },
         { name: 'Turmas', href: '/cms/turmas', icon: '🎓', requiredPermission: 4 },
+        { name: 'Eventos', href: '/cms/eventos', icon: '🎉', requiredPermission: 4 },
         { name: 'Usuários', href: '/cms/usuarios', icon: '👥', requiredPermission: 4 },
         { name: 'Financeiro', href: '/cms/financeiro', icon: '💰', requiredPermission: 4 },
         { name: 'Configurações', href: '/cms/configuracoes', icon: '⚙️', requiredPermission: 4 },

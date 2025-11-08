@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CMS\AuthController as CMSAuthController;
+use App\Http\Controllers\CMS\EventoController;
 use App\Http\Controllers\CMS\FinanceiroAlunoController;
 use App\Http\Controllers\CMS\FinanceiroColaboradorController;
 use App\Http\Controllers\CMS\FinanceiroProfessorController;
@@ -52,6 +53,14 @@ Route::prefix('cms')->name('cms.')->group(function () {
 
         // Turmas e Usuários - Apenas Root e Admin (permission_level >= 4)
         Route::middleware('check.admin')->group(function () {
+            Route::prefix('eventos')->name('eventos.')->group(function () {
+                Route::get('/', [EventoController::class, 'index'])->name('index');
+                Route::get('/escola/create', [EventoController::class, 'createEscola'])->name('escola.create');
+                Route::post('/escola', [EventoController::class, 'storeEscola'])->name('escola.store');
+                Route::get('/externos/create', [EventoController::class, 'createExterno'])->name('externos.create');
+                Route::post('/externos', [EventoController::class, 'storeExterno'])->name('externos.store');
+            });
+
             Route::resource('turmas', TurmaController::class);
             Route::resource('usuarios', UsuarioController::class)->except(['show']);
             Route::prefix('financeiro')->name('financeiro.')->group(function () {
