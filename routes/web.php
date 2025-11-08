@@ -4,6 +4,7 @@ use App\Http\Controllers\CMS\AuthController as CMSAuthController;
 use App\Http\Controllers\CMS\FinanceiroAlunoController;
 use App\Http\Controllers\CMS\FinanceiroColaboradorController;
 use App\Http\Controllers\CMS\FinanceiroProfessorController;
+use App\Http\Controllers\CMS\RelatorioController;
 use App\Http\Controllers\CMS\SettingController;
 use App\Http\Controllers\CMS\TurmaController;
 use App\Http\Controllers\CMS\UsuarioController;
@@ -46,6 +47,8 @@ Route::prefix('cms')->name('cms.')->group(function () {
 
         Route::get('/configuracoes', [SettingController::class, 'edit'])->name('settings.edit');
         Route::put('/configuracoes', [SettingController::class, 'update'])->name('settings.update');
+
+        Route::get('/relatorios', [RelatorioController::class, 'index'])->name('relatorios.index');
 
         // Turmas e Usuários - Apenas Root e Admin (permission_level >= 4)
         Route::middleware('check.admin')->group(function () {
