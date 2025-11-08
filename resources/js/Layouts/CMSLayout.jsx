@@ -24,7 +24,7 @@ export default function CMSLayout({ children }) {
         { name: 'Usuários', href: '/cms/usuarios', icon: '👥', requiredPermission: 4 },
         { name: 'Financeiro', href: '/cms/financeiro', icon: '💰', requiredPermission: 4 },
         { name: 'Configurações', href: '/cms/configuracoes', icon: '⚙️', requiredPermission: 4 },
-        { name: 'Relatórios', href: '/cms/relatorios', icon: '📈', disabled: true },
+        { name: 'Relatórios', href: '/cms/relatorios', icon: '📈', requiredPermission: 4 },
     ];
 
     const isActive = (href) => {
