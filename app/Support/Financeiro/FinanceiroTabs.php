@@ -25,7 +25,7 @@ class FinanceiroTabs
             ],
             [
                 'key' => 'colaboradores',
-                'label' => '🧑\u200d💼 Colaboradores',
+                'label' => '💼 Colaboradores',
                 'route' => 'cms.financeiro.colaboradores.index',
                 'enabled' => $userType === 'root',
                 'tooltip' => $userType === 'root' ? null : 'Disponível apenas para usuários root',

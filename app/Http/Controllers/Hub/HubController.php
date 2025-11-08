@@ -74,17 +74,13 @@ class HubController extends Controller
                 'dashboard' => true,
                 'atividades' => true,
                 'criar_atividade' => true,
-                'gerenciar_usuarios' => true,
-                'relatorios' => true,
-                'configuracoes' => true,
+                'turmas' => true,
             ],
             'admin' => [
                 'dashboard' => true,
                 'atividades' => true,
                 'criar_atividade' => true,
-                'gerenciar_usuarios' => true,
-                'relatorios' => true,
-                'configuracoes' => false,
+                'turmas' => true,
             ],
             'professor' => [
                 'dashboard' => true,
@@ -92,7 +88,6 @@ class HubController extends Controller
                 'criar_atividade' => true,
                 'minhas_turmas' => true,
                 'corrigir_atividades' => true,
-                'relatorios' => true,
             ],
             'aluno' => [
                 'dashboard' => true,

@@ -10,6 +10,7 @@ export default function Create({ userTypes }) {
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         email: '',
+        cpf: '',
         user_type_id: userTypes?.[0]?.id ?? '',
         password: '',
         password_confirmation: '',
@@ -77,6 +78,22 @@ export default function Create({ userTypes }) {
                                         />
                                         {errors.email && (
                                             <p className="text-sm text-red-600">{errors.email}</p>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="cpf">
+                                            CPF <span className="text-red-500">*</span>
+                                        </Label>
+                                        <Input
+                                            id="cpf"
+                                            value={data.cpf}
+                                            onChange={(e) => setData('cpf', e.target.value.replace(/\D/g, ''))}
+                                            placeholder="Somente números"
+                                            maxLength={11}
+                                            className={errors.cpf ? 'border-red-500' : ''}
+                                        />
+                                        {errors.cpf && (
+                                            <p className="text-sm text-red-600">{errors.cpf}</p>
                                         )}
                                     </div>
                                 </div>

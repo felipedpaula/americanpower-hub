@@ -20,7 +20,7 @@ export default function Dashboard() {
             icon: '👥',
             href: '/cms/usuarios',
             color: 'bg-green-500/10 text-green-600 dark:bg-green-500/20 dark:text-green-400',
-            disabled: true,
+            disabled: false,
         },
         {
             title: 'Relatórios',
@@ -36,7 +36,7 @@ export default function Dashboard() {
             icon: '⚙️',
             href: '/cms/configuracoes',
             color: 'bg-gray-500/10 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
-            disabled: true,
+            disabled: false,
         },
     ];
 

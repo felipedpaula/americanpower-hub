@@ -30,22 +30,16 @@ export default function HubLayout({ children }) {
                 ...baseNav,
                 { name: 'Turmas', href: '/hub/turmas', icon: '🎓' },
                 { name: 'Atividades', href: '/hub/atividades', icon: '📝' },
-                { name: 'Usuários', href: '/hub/usuarios', icon: '👥' },
-                { name: 'Relatórios', href: '/hub/relatorios', icon: '📈' },
-                { name: 'Configurações', href: '/hub/configuracoes', icon: '⚙️' },
             ],
             admin: [
                 ...baseNav,
                 { name: 'Turmas', href: '/hub/turmas', icon: '🎓' },
                 { name: 'Atividades', href: '/hub/atividades', icon: '📝' },
-                { name: 'Usuários', href: '/hub/usuarios', icon: '👥' },
-                { name: 'Relatórios', href: '/hub/relatorios', icon: '📈' },
             ],
             professor: [
                 ...baseNav,
                 { name: 'Minhas Turmas', href: '/hub/turmas', icon: '🎓' },
                 { name: 'Atividades', href: '/hub/atividades', icon: '📝' },
-                { name: 'Relatórios', href: '/hub/relatorios', icon: '📈' },
             ],
             aluno: [
                 ...baseNav,

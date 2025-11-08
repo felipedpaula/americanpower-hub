@@ -82,6 +82,7 @@ class UsuarioController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'user_type_id' => ['required', Rule::in($allowedTypeIds)],
+            'cpf' => ['required', 'digits:11', 'unique:users,cpf'],
             'password' => ['required', 'string', 'min:6', 'confirmed'],
         ]);
 
@@ -107,6 +108,7 @@ class UsuarioController extends Controller
                 'user_type_id' => $usuario->user_type_id,
                 'user_type_label' => $this->getTypeLabel($usuario->userType->name),
                 'created_at' => optional($usuario->created_at)->format('d/m/Y H:i'),
+                'cpf' => $usuario->cpf,
             ],
             'userTypes' => $this->getAllowedUserTypes()->map(function (UserType $type) {
                 return [
@@ -131,6 +133,7 @@ class UsuarioController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($usuario->id)],
             'user_type_id' => ['required', Rule::in($allowedTypeIds)],
+            'cpf' => ['required', 'digits:11', Rule::unique('users', 'cpf')->ignore($usuario->id)],
             'password' => ['nullable', 'string', 'min:6', 'confirmed'],
         ]);
 

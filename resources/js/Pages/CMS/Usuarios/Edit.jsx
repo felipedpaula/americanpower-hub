@@ -10,6 +10,7 @@ export default function Edit({ usuario, userTypes }) {
     const { data, setData, put, processing, errors } = useForm({
         name: usuario.name || '',
         email: usuario.email || '',
+        cpf: usuario.cpf || '',
         user_type_id: usuario.user_type_id || '',
         password: '',
         password_confirmation: '',
@@ -75,6 +76,21 @@ export default function Edit({ usuario, userTypes }) {
                                         />
                                         {errors.email && (
                                             <p className="text-sm text-red-600">{errors.email}</p>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="cpf">
+                                            CPF <span className="text-red-500">*</span>
+                                        </Label>
+                                        <Input
+                                            id="cpf"
+                                            value={data.cpf}
+                                            onChange={(e) => setData('cpf', e.target.value.replace(/\D/g, ''))}
+                                            className={errors.cpf ? 'border-red-500' : ''}
+                                            maxLength={11}
+                                        />
+                                        {errors.cpf && (
+                                            <p className="text-sm text-red-600">{errors.cpf}</p>
                                         )}
                                     </div>
                                 </div>
