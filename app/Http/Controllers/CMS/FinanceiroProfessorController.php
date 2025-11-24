@@ -9,6 +9,7 @@ use App\Support\Financeiro\FinanceiroTabs;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -21,6 +22,7 @@ class FinanceiroProfessorController extends Controller
         'atrasado' => 'Em atraso',
         'isento' => 'Isento',
     ];
+    private const DECIMO_TERCEIRO_MES = 13;
 
     public function index(): Response
     {
@@ -104,31 +106,7 @@ class FinanceiroProfessorController extends Controller
             return str_starts_with($registro->competencia, $anoAtual . '-');
         });
 
-        $meses = collect(range(1, 12))->map(function (int $mes) use ($registrosAno, $anoAtual) {
-            $competencia = sprintf('%04d-%02d', $anoAtual, $mes);
-            $registro = $registrosAno->firstWhere('competencia', $competencia);
-            $carbon = Carbon::createFromDate($anoAtual, $mes, 1)->locale('pt_BR');
-
-            if ($registro) {
-                $status = $registro->status;
-            } else {
-                $status = 'sem_registro';
-            }
-
-            return [
-                'competencia' => $competencia,
-                'mes' => $mes,
-                'label' => ucfirst($carbon->translatedFormat('F')),
-                'status' => $status,
-                'status_label' => $status === 'sem_registro'
-                    ? 'Sem lançamento'
-                    : (self::STATUS_LABELS[$status] ?? ucfirst($status)),
-                'valor_previsto' => $registro?->valor_previsto,
-                'valor_pago' => $registro?->valor_pago,
-                'data_prevista' => optional($registro?->data_prevista)->format('Y-m-d'),
-                'data_pagamento' => optional($registro?->data_pagamento)->format('Y-m-d'),
-            ];
-        })->values();
+        $meses = $this->montarCompetenciasDoAno($registrosAno, $anoAtual);
 
         $temAtraso = $financeiros->contains(function (FinanceiroProfessor $registro) {
             if ($registro->status === 'atrasado') {
@@ -180,10 +158,11 @@ class FinanceiroProfessorController extends Controller
     public function showCompetencia(User $professor, string $competencia): Response
     {
         $this->assertProfessor($professor);
-        $competenciaCarbon = $this->parseCompetencia($competencia);
+        $competenciaDados = $this->parseCompetencia($competencia);
+        $competenciaValor = $this->formatCompetenciaValue($competenciaDados['ano'], $competenciaDados['mes']);
 
         $registro = FinanceiroProfessor::where('professor_id', $professor->id)
-            ->where('competencia', $competencia)
+            ->where('competencia', $competenciaValor)
             ->first();
 
         return Inertia::render('CMS/Financeiro/Professores/Competencia', [
@@ -192,8 +171,9 @@ class FinanceiroProfessorController extends Controller
                 'name' => $professor->name,
             ],
             'competencia' => [
-                'valor' => $competencia,
-                'label' => ucfirst($competenciaCarbon->locale('pt_BR')->translatedFormat('F \d\e Y')),
+                'valor' => $competenciaValor,
+                'label' => $this->formatCompetenciaLabel($competenciaDados['ano'], $competenciaDados['mes']),
+                'is_decimo_terceiro' => $competenciaDados['is_decimo_terceiro'],
             ],
             'registro' => $registro ? [
                 'id' => $registro->id,
@@ -215,7 +195,8 @@ class FinanceiroProfessorController extends Controller
     public function updateCompetencia(Request $request, User $professor, string $competencia): RedirectResponse
     {
         $this->assertProfessor($professor);
-        $competenciaCarbon = $this->parseCompetencia($competencia);
+        $competenciaDados = $this->parseCompetencia($competencia);
+        $competenciaValor = $this->formatCompetenciaValue($competenciaDados['ano'], $competenciaDados['mes']);
 
         $validated = $request->validate([
             'valor_previsto' => ['nullable', 'numeric', 'min:0'],
@@ -230,13 +211,13 @@ class FinanceiroProfessorController extends Controller
         FinanceiroProfessor::updateOrCreate(
             [
                 'professor_id' => $professor->id,
-                'competencia' => $competenciaCarbon->format('Y-m'),
+                'competencia' => $competenciaValor,
             ],
             $validated
         );
 
         return redirect()
-            ->route('cms.financeiro.professores.competencias.show', [$professor->id, $competenciaCarbon->format('Y-m')])
+            ->route('cms.financeiro.professores.competencias.show', [$professor->id, $competenciaValor])
             ->with('success', 'Informações financeiras atualizadas com sucesso.');
     }
 
@@ -262,12 +243,62 @@ class FinanceiroProfessorController extends Controller
             ->all();
     }
 
-    private function parseCompetencia(string $competencia): Carbon
+    private function montarCompetenciasDoAno(Collection $registrosAno, int $anoAtual): Collection
     {
-        try {
-            return Carbon::createFromFormat('Y-m', $competencia)->startOfMonth();
-        } catch (\Exception $exception) {
+        return collect(array_merge(range(1, 12), [self::DECIMO_TERCEIRO_MES]))->map(function (int $mes) use ($registrosAno, $anoAtual) {
+            $competencia = $this->formatCompetenciaValue($anoAtual, $mes);
+            $registro = $registrosAno->firstWhere('competencia', $competencia);
+            $status = $registro?->status ?? 'sem_registro';
+
+            return [
+                'competencia' => $competencia,
+                'mes' => $mes,
+                'label' => $this->formatCompetenciaLabel($anoAtual, $mes, false),
+                'periodo_label' => $this->formatCompetenciaLabel($anoAtual, $mes),
+                'status' => $status,
+                'status_label' => $status === 'sem_registro'
+                    ? 'Sem lançamento'
+                    : (self::STATUS_LABELS[$status] ?? ucfirst($status)),
+                'valor_previsto' => $registro?->valor_previsto,
+                'valor_pago' => $registro?->valor_pago,
+                'data_prevista' => optional($registro?->data_prevista)->format('Y-m-d'),
+                'data_pagamento' => optional($registro?->data_pagamento)->format('Y-m-d'),
+                'is_decimo_terceiro' => $mes === self::DECIMO_TERCEIRO_MES,
+            ];
+        })->values();
+    }
+
+    private function formatCompetenciaValue(int $ano, int $mes): string
+    {
+        return sprintf('%04d-%02d', $ano, $mes);
+    }
+
+    private function formatCompetenciaLabel(int $ano, int $mes, bool $incluirAno = true): string
+    {
+        if ($mes === self::DECIMO_TERCEIRO_MES) {
+            return $incluirAno ? "13º salário de {$ano}" : '13º salário';
+        }
+
+        $carbon = Carbon::createFromDate($ano, $mes, 1)->locale('pt_BR');
+
+        return $incluirAno
+            ? ucfirst($carbon->translatedFormat('F \d\e Y'))
+            : ucfirst($carbon->translatedFormat('F'));
+    }
+
+    private function parseCompetencia(string $competencia): array
+    {
+        if (!preg_match('/^(\\d{4})-(0[1-9]|1[0-3])$/', $competencia, $matches)) {
             abort(404);
         }
+
+        $ano = (int) $matches[1];
+        $mes = (int) $matches[2];
+
+        return [
+            'ano' => $ano,
+            'mes' => $mes,
+            'is_decimo_terceiro' => $mes === self::DECIMO_TERCEIRO_MES,
+        ];
     }
 }

@@ -14,6 +14,8 @@ use Inertia\Response;
 
 class RelatorioController extends Controller
 {
+    private const DECIMO_TERCEIRO_MES = 13;
+
     public function index(Request $request): Response
     {
         $anoAtual = (int) $request->query('ano', now()->year);
@@ -101,17 +103,28 @@ class RelatorioController extends Controller
 
         $quantidades = $registros->groupBy('status')->map->count();
 
-        $mensal = collect(range(1, 12))
+        $temDecimoTerceiro = $registros->contains(function ($registro) {
+            return substr((string) $registro->competencia, 5, 2) === '13';
+        }) || $mes === self::DECIMO_TERCEIRO_MES;
+
+        $mesesParaListar = $temDecimoTerceiro
+            ? array_merge(range(1, 12), [self::DECIMO_TERCEIRO_MES])
+            : range(1, 12);
+
+        $mensal = collect($mesesParaListar)
             ->map(function (int $mesAtual) use ($registros, $ano) {
                 $competencia = sprintf('%04d-%02d', $ano, $mesAtual);
                 $registrosMes = $registros->filter(fn ($registro) => $registro->competencia === $competencia);
 
                 $previstoMes = $registrosMes->sum(fn ($registro) => (float) ($registro->valor_previsto ?? 0));
                 $pagoMes = $registrosMes->sum(fn ($registro) => (float) ($registro->valor_pago ?? 0));
+                $label = $mesAtual === self::DECIMO_TERCEIRO_MES
+                    ? '13º salário'
+                    : ucfirst(Carbon::createFromDate($ano, $mesAtual, 1)->locale('pt_BR')->translatedFormat('F'));
 
                 return [
                     'mes' => $mesAtual,
-                    'label' => ucfirst(Carbon::createFromDate($ano, $mesAtual, 1)->locale('pt_BR')->translatedFormat('F')),
+                    'label' => $label,
                     'previsto' => $previstoMes,
                     'realizado' => $pagoMes,
                     'pendente' => max(0, $previstoMes - $pagoMes),
@@ -141,8 +154,10 @@ class RelatorioController extends Controller
 
     private function listarMeses(int $ano, ?int $mesSelecionado): Collection
     {
-        return collect(range(1, 12))->map(function (int $mes) use ($ano, $mesSelecionado) {
-            $label = ucfirst(Carbon::createFromDate($ano, $mes, 1)->locale('pt_BR')->translatedFormat('F'));
+        return collect(array_merge(range(1, 12), [self::DECIMO_TERCEIRO_MES]))->map(function (int $mes) use ($ano, $mesSelecionado) {
+            $label = $mes === self::DECIMO_TERCEIRO_MES
+                ? '13º salário'
+                : ucfirst(Carbon::createFromDate($ano, $mes, 1)->locale('pt_BR')->translatedFormat('F'));
 
             return [
                 'valor' => $mes,

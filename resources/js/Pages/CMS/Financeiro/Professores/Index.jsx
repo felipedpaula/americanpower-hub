@@ -57,7 +57,7 @@ export default function Index({ professores = [], tabs = [] }) {
                     <div>
                         <h1 className="text-3xl font-bold text-foreground dark:text-foreground">Financeiro</h1>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Gerencie os pagamentos de professores e acompanhe lançamentos mensais.
+                            Gerencie os pagamentos de professores, incluindo lançamentos mensais e 13º salário.
                         </p>
                     </div>
                     <FinanceiroTabs tabs={tabs} />
@@ -67,7 +67,7 @@ export default function Index({ professores = [], tabs = [] }) {
                     <CardHeader>
                         <CardTitle>Professores cadastrados</CardTitle>
                         <CardDescription>
-                            Visualize rapidamente a situação financeira de cada professor e registre pagamentos mensais.
+                            Visualize rapidamente a situação financeira de cada professor e registre pagamentos mensais e o 13º salário.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">

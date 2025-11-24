@@ -124,7 +124,7 @@ export default function Show({ professor, resumo, anoAtual, anosDisponiveis = []
                         <div>
                             <CardTitle>Pagamentos por competência</CardTitle>
                             <CardDescription>
-                                Acompanhe o status de cada mês do ano selecionado. Clique para visualizar ou editar os detalhes.
+                                Acompanhe o status de cada competência do ano selecionado, incluindo o 13º salário. Clique para visualizar ou editar os detalhes.
                             </CardDescription>
                         </div>
                         <div className="w-full md:w-56">
@@ -149,7 +149,7 @@ export default function Show({ professor, resumo, anoAtual, anosDisponiveis = []
                                     <CardHeader className="flex flex-row items-center justify-between space-y-0">
                                         <div>
                                             <CardTitle className="text-base font-semibold capitalize">{mes.label}</CardTitle>
-                                            <CardDescription>{mes.competencia}</CardDescription>
+                                            <CardDescription>{mes.periodo_label || mes.competencia}</CardDescription>
                                         </div>
                                         <span
                                             className={`rounded-full px-3 py-1 text-xs font-medium ${

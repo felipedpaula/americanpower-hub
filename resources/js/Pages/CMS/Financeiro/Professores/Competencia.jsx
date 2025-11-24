@@ -16,6 +16,7 @@ import FinanceiroTabs from '../components/Tabs';
 
 export default function Competencia({ professor, competencia, registro = {}, statusOptions = [], tabs = [] }) {
     const { props } = usePage();
+    const isDecimoTerceiro = competencia?.is_decimo_terceiro;
 
     const form = useForm({
         valor_previsto: registro?.valor_previsto ?? '',
@@ -34,7 +35,7 @@ export default function Competencia({ professor, competencia, registro = {}, sta
 
     return (
         <CMSLayout>
-            <Head title={`Financeiro - ${professor?.name} (${competencia?.valor})`} />
+            <Head title={`Financeiro - ${professor?.name} (${competencia?.label || competencia?.valor})`} />
 
             <div className="space-y-6 animate-fadeIn">
                 <FinanceiroTabs tabs={tabs} className="justify-start md:justify-end" />
@@ -47,7 +48,9 @@ export default function Competencia({ professor, competencia, registro = {}, sta
                     </Link>
                     <h1 className="text-3xl font-bold text-foreground dark:text-foreground">{competencia?.label}</h1>
                     <p className="text-sm text-muted-foreground">
-                        Atualize as informações financeiras desta competência mensal do professor.
+                        {isDecimoTerceiro
+                            ? 'Atualize as informações do 13º salário do professor neste ano.'
+                            : 'Atualize as informações financeiras desta competência mensal do professor.'}
                     </p>
                 </div>
 
