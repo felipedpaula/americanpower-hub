@@ -3,6 +3,9 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -25,6 +28,28 @@ class Handler extends ExceptionHandler
     {
         $this->reportable(function (Throwable $e) {
             //
+        });
+
+        $this->renderable(function (NotFoundHttpException $e, Request $request) {
+            if ($request->expectsJson()) {
+                return null;
+            }
+
+            if ($request->is('cms') || $request->is('cms/*')) {
+                return Inertia::render('Error', [
+                    'status' => 404,
+                    'context' => 'cms',
+                ])->toResponse($request)->setStatusCode(404);
+            }
+
+            if ($request->is('hub') || $request->is('hub/*')) {
+                return Inertia::render('Error', [
+                    'status' => 404,
+                    'context' => 'hub',
+                ])->toResponse($request)->setStatusCode(404);
+            }
+
+            return response()->view('errors.404', [], 404);
         });
     }
 }
