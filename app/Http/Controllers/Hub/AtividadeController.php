@@ -5,600 +5,700 @@ namespace App\Http\Controllers\Hub;
 use App\Http\Controllers\Controller;
 use App\Models\Atividade;
 use App\Models\AtividadeAluno;
-use App\Models\AtividadeTipo;
-use App\Models\QuestaoAtividade;
-use App\Models\QuestaoAtividadeAluno;
+use App\Models\AtividadeBloco;
+use App\Models\AtividadeResposta;
 use App\Models\TurmaCriada;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AtividadeController extends Controller
 {
-    /**
-     * Lista todas as atividades acessíveis pelo usuário
-     */
     public function index(Request $request)
     {
-        $user = auth()->user();
+        $user = $request->user();
         $userType = $user->userType->name;
 
-        $query = Atividade::with(['tipo', 'turma.turma', 'turma.professor']);
+        $query = Atividade::query()
+            ->with(['turmaCriada.turma', 'turmaCriada.professor', 'professor'])
+            ->withCount([
+                'atividadeAlunos as total_alunos_count',
+                'atividadeAlunos as pendentes_count' => fn ($query) => $query->where('status', AtividadeAluno::STATUS_PENDENTE),
+                'atividadeAlunos as entregues_count' => fn ($query) => $query->where('status', AtividadeAluno::STATUS_ENTREGUE),
+            ]);
 
         if ($userType === 'professor') {
-            // Professor vê apenas atividades de suas turmas
-            $query->whereHas('turma', function ($q) use ($user) {
-                $q->where('professor_id', $user->id);
+            $query->where(function ($query) use ($user) {
+                $query->where('professor_id', $user->id)
+                    ->orWhereHas('turmaCriada', fn ($turmaQuery) => $turmaQuery->where('professor_id', $user->id));
             });
         } elseif ($userType === 'aluno') {
-            // Aluno vê apenas atividades das turmas em que está matriculado
-            $turmaIds = TurmaCriada::whereJsonContains('alunos', (string)$user->id)
-                ->orWhereJsonContains('alunos', $user->id)
-                ->pluck('id');
-            $query->whereIn('turma_id', $turmaIds);
-        }
-        // Admin e Root veem todas
-
-        $atividades = $query->orderBy('created_at', 'desc')->get();
-
-        // Para alunos, incluir status de cada atividade
-        if ($userType === 'aluno') {
-            $atividades->load(['atividadeAlunos' => function ($q) use ($user) {
-                $q->where('aluno_id', $user->id);
-            }]);
+            $query->whereHas('atividadeAlunos', fn ($query) => $query->where('aluno_id', $user->id))
+                ->with(['atividadeAlunos' => fn ($query) => $query->where('aluno_id', $user->id)]);
         }
 
         return Inertia::render('Hub/Atividades/Index', [
-            'atividades' => $atividades,
+            'atividades' => $query->latest()
+                ->get()
+                ->map(fn (Atividade $atividade) => $this->serializeAtividadeResumo($atividade, $user)),
         ]);
     }
 
-    /**
-     * Exibe o formulário de criação de atividade
-     */
-    public function create()
+    public function create(Request $request)
     {
-        $user = auth()->user();
+        $user = $request->user();
         $userType = $user->userType->name;
 
-        // Apenas professores, admin e root podem criar
         if (!in_array($userType, ['professor', 'admin', 'root'])) {
             abort(403, 'Você não tem permissão para criar atividades.');
         }
-
-        // Busca turmas do professor
-        $turmas = TurmaCriada::with('turma')
-            ->when($userType === 'professor', function ($q) use ($user) {
-                $q->where('professor_id', $user->id);
-            })
-            ->where('status', '!=', 'encerrada')
-            ->get();
-
-        $tipos = AtividadeTipo::all();
 
         return Inertia::render('Hub/Atividades/Create', [
-            'turmas' => $turmas,
-            'tipos' => $tipos,
+            'turmas' => $this->availableTurmas($user),
         ]);
     }
 
-    /**
-     * Armazena uma nova atividade
-     */
     public function store(Request $request)
     {
-        $user = auth()->user();
+        $user = $request->user();
         $userType = $user->userType->name;
 
         if (!in_array($userType, ['professor', 'admin', 'root'])) {
             abort(403, 'Você não tem permissão para criar atividades.');
         }
 
-        $validated = $request->validate([
-            'tipo_id' => 'required|exists:atividade_tipos,id',
-            'turma_id' => 'required|exists:turmas_criadas,id',
-            'titulo' => 'required|string|max:255',
-            'descricao' => 'nullable|string',
-            'nota_max' => 'required|numeric|min:0|max:999999.99',
-            'data_entrega' => 'nullable|date',
-        ]);
+        $validated = $this->validateAtividade($request, requireStructure: true);
+        $turma = TurmaCriada::findOrFail($validated['turma_criada_id']);
 
-        $turma = TurmaCriada::findOrFail($validated['turma_id']);
+        $this->ensureCanManageTurma($user, $turma);
+        $this->ensureTurmaAberta($turma);
 
-        // Verifica se o professor tem permissão sobre a turma
-        if ($userType === 'professor') {
-            if ($turma->professor_id !== $user->id) {
-                abort(403, 'Você não tem permissão para criar atividades nesta turma.');
-            }
-        }
+        $blocos = $this->normalizeBlocos($validated['blocos']);
 
-        if ($turma->status !== 'em andamento') {
-            return back()
-                ->withErrors(['turma_id' => 'Não é possível criar atividades para turmas bloqueadas ou encerradas.'])
-                ->withInput();
-        }
+        $atividade = DB::transaction(function () use ($validated, $turma, $blocos, $user, $userType) {
+            $atividade = Atividade::create([
+                'turma_criada_id' => $turma->id,
+                'professor_id' => $userType === 'professor' ? $user->id : $turma->professor_id,
+                'titulo' => $validated['titulo'],
+                'descricao' => $validated['descricao'] ?? null,
+                'instrucoes' => $validated['instrucoes'] ?? null,
+                'nota_max' => $validated['nota_max'],
+                'data_entrega' => $validated['data_entrega'] ?? null,
+            ]);
 
-        DB::beginTransaction();
-        try {
-            $atividade = Atividade::create($validated);
+            $this->syncBlocos($atividade, $blocos);
+            $this->syncAtividadeAlunos($atividade, $turma);
 
-            // Criar registros para todos os alunos da turma
-            $alunos = $turma->alunos ?? [];
-            
-            $atividadesAlunoData = [];
-            foreach ($alunos as $alunoId) {
-                $atividadesAlunoData[] = [
-                    'atividade_id' => $atividade->id,
-                    'aluno_id' => (int)$alunoId,
-                    'status' => 'pendente',
-                    'nota_total' => 0,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            }
+            return $atividade;
+        });
 
-            if (!empty($atividadesAlunoData)) {
-                AtividadeAluno::insert($atividadesAlunoData);
-            }
-
-            DB::commit();
-
-            return redirect()->route('hub.atividades.show', $atividade->id)
-                ->with('success', 'Atividade criada com sucesso!');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->withErrors(['error' => 'Erro ao criar atividade: ' . $e->getMessage()]);
-        }
+        return redirect()
+            ->route('hub.atividades.show', $atividade->id)
+            ->with('success', 'Atividade criada com sucesso.');
     }
 
-    /**
-     * Exibe uma atividade específica
-     */
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        $user = auth()->user();
+        $user = $request->user();
         $atividade = Atividade::with([
-            'tipo',
-            'turma.turma',
-            'turma.professor',
-            'questoes' => function ($q) {
-                $q->orderBy('created_at', 'asc');
-            }
+            'turmaCriada.turma',
+            'turmaCriada.professor',
+            'professor',
+            'blocos',
+            'atividadeAlunos.aluno',
+            'atividadeAlunos.respostas',
         ])->findOrFail($id);
 
-        // Verifica permissão de acesso
         if (!$atividade->canAccess($user)) {
             abort(403, 'Você não tem permissão para acessar esta atividade.');
         }
 
-        $data = ['atividade' => $atividade];
+        $data = [
+            'atividade' => $this->serializeAtividadeDetalhe($atividade, $user),
+        ];
 
-        // Se for aluno, carrega suas respostas
         if ($user->userType->name === 'aluno') {
-            $atividadeAluno = AtividadeAluno::where('atividade_id', $id)
-                ->where('aluno_id', $user->id)
-                ->first();
+            $atividadeAluno = $atividade->atividadeAlunos->firstWhere('aluno_id', $user->id);
 
-            $respostasAluno = QuestaoAtividadeAluno::where('aluno_id', $user->id)
-                ->whereIn('questao_id', $atividade->questoes->pluck('id'))
-                ->get()
-                ->keyBy('questao_id');
-
-            $data['atividadeAluno'] = $atividadeAluno;
-            $data['respostasAluno'] = $respostasAluno;
+            $data['atividadeAluno'] = $atividadeAluno
+                ? $this->serializeAtividadeAluno($atividadeAluno)
+                : null;
+            $data['respostasAluno'] = $atividadeAluno
+                ? $atividadeAluno->respostas->mapWithKeys(fn (AtividadeResposta $resposta) => [
+                    $resposta->atividade_bloco_id => $resposta->resposta,
+                ])
+                : [];
         }
 
-        // Se for professor ou admin, carrega estatísticas
-        if (in_array($user->userType->name, ['professor', 'admin', 'root'])) {
-            $data['estatisticas'] = [
-                'total_alunos' => AtividadeAluno::where('atividade_id', $id)->count(),
-                'enviados' => AtividadeAluno::where('atividade_id', $id)->where('status', 'enviado')->count(),
-                'corrigidos' => AtividadeAluno::where('atividade_id', $id)->where('status', 'corrigido')->count(),
-                'pendentes' => AtividadeAluno::where('atividade_id', $id)->where('status', 'pendente')->count(),
-            ];
+        if ($atividade->canManage($user)) {
+            $data['estatisticas'] = $this->serializeEstatisticas($atividade);
+            $data['alunos'] = $atividade->atividadeAlunos
+                ->sortBy(fn (AtividadeAluno $atividadeAluno) => $atividadeAluno->aluno?->name)
+                ->values()
+                ->map(fn (AtividadeAluno $atividadeAluno) => $this->serializeAtividadeAluno($atividadeAluno));
         }
 
         return Inertia::render('Hub/Atividades/Show', $data);
     }
 
-    /**
-     * Exibe formulário de edição
-     */
-    public function edit($id)
+    public function edit(Request $request, $id)
     {
-        $user = auth()->user();
-        $atividade = Atividade::with(['tipo', 'turma'])->findOrFail($id);
+        $user = $request->user();
+        $atividade = Atividade::with(['turmaCriada.turma', 'turmaCriada.professor', 'professor', 'blocos'])
+            ->findOrFail($id);
 
         if (!$atividade->canEdit($user)) {
             abort(403, 'Você não tem permissão para editar esta atividade.');
         }
 
-        $userType = $user->userType->name;
-        $turmas = TurmaCriada::with('turma')
-            ->when($userType === 'professor', function ($q) use ($user) {
-                $q->where('professor_id', $user->id);
-            })
-            ->where('status', '!=', 'encerrada')
-            ->get();
-
-        $tipos = AtividadeTipo::all();
-
         return Inertia::render('Hub/Atividades/Edit', [
-            'atividade' => $atividade,
-            'turmas' => $turmas,
-            'tipos' => $tipos,
+            'atividade' => $this->serializeAtividadeDetalhe($atividade, $user),
+            'turmas' => $this->availableTurmas($user),
+            'canEditStructure' => !$atividade->hasEntregas(),
         ]);
     }
 
-    /**
-     * Atualiza uma atividade
-     */
     public function update(Request $request, $id)
     {
-        $user = auth()->user();
-        $atividade = Atividade::findOrFail($id);
+        $user = $request->user();
+        $atividade = Atividade::with(['turmaCriada', 'atividadeAlunos'])->findOrFail($id);
 
         if (!$atividade->canEdit($user)) {
             abort(403, 'Você não tem permissão para editar esta atividade.');
         }
 
-        $validated = $request->validate([
-            'tipo_id' => 'required|exists:atividade_tipos,id',
-            'turma_id' => 'required|exists:turmas_criadas,id',
-            'titulo' => 'required|string|max:255',
-            'descricao' => 'nullable|string',
-            'nota_max' => 'required|numeric|min:0|max:999999.99',
-            'data_entrega' => 'nullable|date',
-        ]);
+        $hasEntregas = $atividade->hasEntregas();
+        $validated = $this->validateAtividade($request, requireStructure: !$hasEntregas);
 
-        $turma = TurmaCriada::findOrFail($validated['turma_id']);
-
-        // Verifica se o professor tem permissão sobre a turma
-        if ($user->userType->name === 'professor') {
-            if ($turma->professor_id !== $user->id) {
-                abort(403, 'Você não tem permissão para mover esta atividade para esta turma.');
-            }
-        }
-
-        if ($turma->status !== 'em andamento') {
+        if ($atividade->atividadeAlunos()
+            ->whereNotNull('nota_total')
+            ->where('nota_total', '>', $validated['nota_max'])
+            ->exists()) {
             return back()
-                ->withErrors(['turma_id' => 'Não é possível alterar atividades vinculadas a turmas bloqueadas ou encerradas.'])
+                ->withErrors(['nota_max' => 'A nota máxima não pode ser menor que uma nota já lançada.'])
                 ->withInput();
         }
 
-        $atividade->update($validated);
+        if ($hasEntregas) {
+            $atividade->update([
+                'titulo' => $validated['titulo'],
+                'descricao' => $validated['descricao'] ?? null,
+                'instrucoes' => $validated['instrucoes'] ?? null,
+                'nota_max' => $validated['nota_max'],
+                'data_entrega' => $validated['data_entrega'] ?? null,
+            ]);
 
-        return redirect()->route('hub.atividades.show', $atividade->id)
-            ->with('success', 'Atividade atualizada com sucesso!');
+            return redirect()
+                ->route('hub.atividades.show', $atividade->id)
+                ->with('success', 'Dados gerais da atividade atualizados. Os blocos não foram alterados porque já há entrega.');
+        }
+
+        $turma = TurmaCriada::findOrFail($validated['turma_criada_id']);
+        $this->ensureCanManageTurma($user, $turma);
+        $this->ensureTurmaAberta($turma);
+        $blocos = $this->normalizeBlocos($validated['blocos']);
+
+        DB::transaction(function () use ($atividade, $validated, $turma, $blocos) {
+            $atividade->update([
+                'turma_criada_id' => $turma->id,
+                'professor_id' => $turma->professor_id,
+                'titulo' => $validated['titulo'],
+                'descricao' => $validated['descricao'] ?? null,
+                'instrucoes' => $validated['instrucoes'] ?? null,
+                'nota_max' => $validated['nota_max'],
+                'data_entrega' => $validated['data_entrega'] ?? null,
+            ]);
+
+            $this->syncBlocos($atividade, $blocos);
+            $this->syncAtividadeAlunos($atividade, $turma);
+        });
+
+        return redirect()
+            ->route('hub.atividades.show', $atividade->id)
+            ->with('success', 'Atividade atualizada com sucesso.');
     }
 
-    /**
-     * Remove uma atividade
-     */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $user = auth()->user();
+        $user = $request->user();
         $atividade = Atividade::findOrFail($id);
 
         if (!$atividade->canEdit($user)) {
             abort(403, 'Você não tem permissão para excluir esta atividade.');
         }
 
-        $atividade->delete();
-
-        return redirect()->route('hub.atividades.index')
-            ->with('success', 'Atividade excluída com sucesso!');
-    }
-
-    /**
-     * Exibe formulário para criação de questão
-     */
-    public function createQuestao($id)
-    {
-        $user = auth()->user();
-        $atividade = Atividade::with(['turma.turma'])->findOrFail($id);
-
-        if (!$atividade->canEdit($user)) {
-            abort(403, 'Você não tem permissão para adicionar questões a esta atividade.');
+        if ($atividade->hasEntregas()) {
+            return back()->withErrors(['error' => 'Não é possível excluir uma atividade que já possui entregas.']);
         }
 
-        return Inertia::render('Hub/Atividades/Questoes/Create', [
-            'atividade' => [
-                'id' => $atividade->id,
-                'titulo' => $atividade->titulo,
-                'nota_max' => $atividade->nota_max,
-                'turma' => [
-                    'nome' => $atividade->turma->turma->nome ?? null,
-                    'status' => $atividade->turma->status,
-                ],
-            ],
-        ]);
+        $atividade->delete();
+
+        return redirect()
+            ->route('hub.atividades.index')
+            ->with('success', 'Atividade excluída com sucesso.');
     }
 
-    /**
-     * Adiciona uma questão à atividade
-     */
-    public function addQuestao(Request $request, $id)
+    public function submeter(Request $request, $id)
     {
-        $user = auth()->user();
-        $atividade = Atividade::findOrFail($id);
+        $user = $request->user();
 
-        if (!$atividade->canEdit($user)) {
-            abort(403, 'Você não tem permissão para adicionar questões a esta atividade.');
+        if ($user->userType->name !== 'aluno') {
+            abort(403, 'Apenas alunos podem entregar atividades.');
+        }
+
+        $atividade = Atividade::with(['blocos', 'atividadeAlunos' => fn ($query) => $query->where('aluno_id', $user->id)])
+            ->findOrFail($id);
+
+        if (!$atividade->canAccess($user)) {
+            abort(403, 'Você não tem acesso a esta atividade.');
+        }
+
+        $atividadeAluno = $atividade->atividadeAlunos->first();
+
+        if (!$atividadeAluno) {
+            abort(403, 'Esta atividade não está vinculada ao seu usuário.');
+        }
+
+        if ($atividadeAluno->status === AtividadeAluno::STATUS_ENTREGUE) {
+            return back()->withErrors(['error' => 'Esta atividade já foi entregue.']);
+        }
+
+        $respostas = $this->normalizeRespostas($request->input('respostas', []), $atividade->blocos);
+
+        DB::transaction(function () use ($atividadeAluno, $respostas) {
+            foreach ($respostas as $atividadeBlocoId => $resposta) {
+                AtividadeResposta::updateOrCreate(
+                    [
+                        'atividade_aluno_id' => $atividadeAluno->id,
+                        'atividade_bloco_id' => $atividadeBlocoId,
+                    ],
+                    ['resposta' => $resposta]
+                );
+            }
+
+            $atividadeAluno->update([
+                'status' => AtividadeAluno::STATUS_ENTREGUE,
+                'data_submissao' => now(),
+            ]);
+        });
+
+        return back()->with('success', 'Atividade entregue com sucesso.');
+    }
+
+    public function atualizarNota(Request $request, $id, $alunoId)
+    {
+        $user = $request->user();
+        $atividade = Atividade::with('turmaCriada')->findOrFail($id);
+
+        if (!$atividade->canManage($user)) {
+            abort(403, 'Você não tem permissão para lançar nota nesta atividade.');
+        }
+
+        $atividadeAluno = AtividadeAluno::where('atividade_id', $atividade->id)
+            ->where('aluno_id', $alunoId)
+            ->firstOrFail();
+
+        if ($atividadeAluno->status !== AtividadeAluno::STATUS_ENTREGUE) {
+            return back()->withErrors(['nota_total' => 'Só é possível lançar nota após a entrega do aluno.']);
         }
 
         $validated = $request->validate([
-            'enunciado' => 'required|string',
-            'valor' => 'required|numeric|min:0|max:999999.99',
-            'resposta_esperada' => 'nullable|string',
+            'nota_total' => ['nullable', 'numeric', 'min:0', 'max:' . $atividade->nota_max],
         ]);
 
-        DB::beginTransaction();
-        try {
-            $questao = QuestaoAtividade::create([
-                'atividade_id' => $id,
-                'enunciado' => $validated['enunciado'],
-                'resposta_esperada' => $validated['resposta_esperada'] ?? null,
-                'valor' => $validated['valor'],
-                'status' => 'ativa',
-            ]);
+        $atividadeAluno->update([
+            'nota_total' => $validated['nota_total'] ?? null,
+        ]);
 
-            // Criar registros vazios para todos os alunos usando batch insert
-            $alunoIds = AtividadeAluno::where('atividade_id', $id)->pluck('aluno_id');
-            $respostasData = [];
-            foreach ($alunoIds as $alunoId) {
-                $respostasData[] = [
-                    'questao_id' => $questao->id,
-                    'aluno_id' => (int)$alunoId,
-                    'status' => 'em_branco',
-                    'nota_obtida' => 0,
-                    'created_at' => now(),
-                    'updated_at' => now(),
+        return back()->with('success', 'Nota atualizada com sucesso.');
+    }
+
+    private function validateAtividade(Request $request, bool $requireStructure): array
+    {
+        $rules = [
+            'titulo' => ['required', 'string', 'max:255'],
+            'descricao' => ['nullable', 'string'],
+            'instrucoes' => ['nullable', 'string'],
+            'nota_max' => ['required', 'numeric', 'min:0', 'max:999999.99'],
+            'data_entrega' => ['nullable', 'date'],
+        ];
+
+        if ($requireStructure) {
+            $rules = array_merge($rules, [
+                'turma_criada_id' => ['required', 'exists:turmas_criadas,id'],
+                'blocos' => ['required', 'array', 'min:1'],
+                'blocos.*.tipo' => ['required', Rule::in(AtividadeBloco::TIPOS)],
+                'blocos.*.ordem' => ['required', 'integer', 'min:1'],
+                'blocos.*.titulo' => ['nullable', 'string', 'max:255'],
+                'blocos.*.conteudo' => ['required', 'array'],
+            ]);
+        }
+
+        return $request->validate($rules);
+    }
+
+    private function normalizeBlocos(array $blocos): array
+    {
+        $normalizados = [];
+
+        foreach (array_values($blocos) as $index => $bloco) {
+            $tipo = $bloco['tipo'] ?? null;
+            $conteudo = $bloco['conteudo'] ?? [];
+            $fieldPrefix = "blocos.{$index}.conteudo";
+
+            $normalizados[] = [
+                'tipo' => $tipo,
+                'ordem' => $index + 1,
+                'titulo' => $bloco['titulo'] ?? null,
+                'conteudo' => $this->normalizeConteudoBloco($tipo, $conteudo, $fieldPrefix),
+            ];
+        }
+
+        return $normalizados;
+    }
+
+    private function normalizeConteudoBloco(?string $tipo, array $conteudo, string $fieldPrefix): array
+    {
+        if (in_array($tipo, [AtividadeBloco::TIPO_TRADUCAO, AtividadeBloco::TIPO_COMPLETE])) {
+            $texto = trim((string) ($conteudo['texto'] ?? ''));
+
+            if ($texto === '') {
+                throw ValidationException::withMessages([
+                    "{$fieldPrefix}.texto" => 'Informe o texto do bloco.',
+                ]);
+            }
+
+            return ['texto' => $texto];
+        }
+
+        if ($tipo === AtividadeBloco::TIPO_PERGUNTA_RESPOSTA) {
+            $perguntas = collect($conteudo['perguntas'] ?? [])
+                ->map(fn ($pergunta) => trim((string) $pergunta))
+                ->filter()
+                ->values()
+                ->all();
+
+            if (empty($perguntas)) {
+                throw ValidationException::withMessages([
+                    "{$fieldPrefix}.perguntas" => 'Informe pelo menos uma pergunta.',
+                ]);
+            }
+
+            return ['perguntas' => $perguntas];
+        }
+
+        if ($tipo === AtividadeBloco::TIPO_ALTERNATIVA) {
+            $perguntas = [];
+
+            foreach (($conteudo['perguntas'] ?? []) as $perguntaIndex => $pergunta) {
+                $enunciado = trim((string) ($pergunta['pergunta'] ?? ''));
+                $opcoes = collect($pergunta['opcoes'] ?? [])
+                    ->map(fn ($opcao) => trim((string) $opcao))
+                    ->filter()
+                    ->values()
+                    ->all();
+
+                if ($enunciado === '' && empty($opcoes)) {
+                    continue;
+                }
+
+                if ($enunciado === '' || count($opcoes) < 2) {
+                    throw ValidationException::withMessages([
+                        "{$fieldPrefix}.perguntas.{$perguntaIndex}" => 'Cada pergunta de alternativa precisa de enunciado e pelo menos duas opções.',
+                    ]);
+                }
+
+                $perguntas[] = [
+                    'pergunta' => $enunciado,
+                    'opcoes' => $opcoes,
                 ];
             }
 
-            if (!empty($respostasData)) {
-                QuestaoAtividadeAluno::insert($respostasData);
+            if (empty($perguntas)) {
+                throw ValidationException::withMessages([
+                    "{$fieldPrefix}.perguntas" => 'Informe pelo menos uma pergunta de alternativa.',
+                ]);
             }
 
-            DB::commit();
-
-            return back()->with('success', 'Questão adicionada com sucesso!');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->withErrors(['error' => 'Erro ao adicionar questão: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Atualiza uma questão
-     */
-    public function updateQuestao(Request $request, $id, $questaoId)
-    {
-        $user = auth()->user();
-        $atividade = Atividade::findOrFail($id);
-        $questao = QuestaoAtividade::where('atividade_id', $id)->findOrFail($questaoId);
-
-        if (!$atividade->canEdit($user)) {
-            abort(403, 'Você não tem permissão para editar questões desta atividade.');
+            return ['perguntas' => $perguntas];
         }
 
-        $validated = $request->validate([
-            'enunciado' => 'required|string',
-            'valor' => 'required|numeric|min:0|max:999999.99',
-            'status' => ['required', Rule::in(['ativa', 'anulada'])],
-            'resposta_esperada' => 'nullable|string',
-        ]);
-
-        try {
-            $questao->update($validated);
-            return back()->with('success', 'Questão atualizada com sucesso!');
-        } catch (\Exception $e) {
-            return back()->withErrors(['error' => 'Erro ao atualizar questão: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Remove uma questão
-     */
-    public function destroyQuestao($id, $questaoId)
-    {
-        $user = auth()->user();
-        $atividade = Atividade::findOrFail($id);
-        $questao = QuestaoAtividade::where('atividade_id', $id)->findOrFail($questaoId);
-
-        if (!$atividade->canEdit($user)) {
-            abort(403, 'Você não tem permissão para excluir questões desta atividade.');
-        }
-
-        $questao->delete();
-
-        return back()->with('success', 'Questão excluída com sucesso!');
-    }
-
-    /**
-     * Aluno responde uma questão
-     */
-    public function responderQuestao(Request $request, $id, $questaoId)
-    {
-        $user = auth()->user();
-
-        if ($user->userType->name !== 'aluno') {
-            abort(403, 'Apenas alunos podem responder questões.');
-        }
-
-        $atividade = Atividade::findOrFail($id);
-        if (!$atividade->canAccess($user)) {
-            abort(403, 'Você não tem acesso a esta atividade.');
-        }
-
-        $questao = QuestaoAtividade::where('atividade_id', $id)->findOrFail($questaoId);
-
-        $validated = $request->validate([
-            'resposta' => 'required|string',
-        ]);
-
-        $respostaAluno = QuestaoAtividadeAluno::where('questao_id', $questaoId)
-            ->where('aluno_id', $user->id)
-            ->first();
-
-        if ($respostaAluno) {
-            $respostaAluno->update([
-                'resposta' => $validated['resposta'],
-                'status' => 'respondida',
-            ]);
-        } else {
-            QuestaoAtividadeAluno::create([
-                'questao_id' => $questaoId,
-                'aluno_id' => $user->id,
-                'resposta' => $validated['resposta'],
-                'status' => 'respondida',
-                'nota_obtida' => 0,
-            ]);
-        }
-
-        return back()->with('success', 'Resposta salva com sucesso!');
-    }
-
-    /**
-     * Aluno submete a atividade completa
-     */
-    public function submeter($id)
-    {
-        $user = auth()->user();
-
-        if ($user->userType->name !== 'aluno') {
-            abort(403, 'Apenas alunos podem submeter atividades.');
-        }
-
-        $atividade = Atividade::findOrFail($id);
-        if (!$atividade->canAccess($user)) {
-            abort(403, 'Você não tem acesso a esta atividade.');
-        }
-
-        $atividadeAluno = AtividadeAluno::where('atividade_id', $id)
-            ->where('aluno_id', $user->id)
-            ->firstOrFail();
-
-        if ($atividadeAluno->status === 'enviado' || $atividadeAluno->status === 'corrigido') {
-            return back()->withErrors(['error' => 'Esta atividade já foi submetida.']);
-        }
-
-        $atividadeAluno->update([
-            'status' => 'enviado',
-            'data_submissao' => now(),
-        ]);
-
-        return back()->with('success', 'Atividade submetida com sucesso!');
-    }
-
-    /**
-     * Professor corrige uma questão de um aluno
-     */
-    public function corrigirQuestao(Request $request, $id, $alunoId, $questaoId)
-    {
-        $user = auth()->user();
-        $atividade = Atividade::findOrFail($id);
-
-        if (!$atividade->canEdit($user)) {
-            abort(403, 'Você não tem permissão para corrigir esta atividade.');
-        }
-
-        $validated = $request->validate([
-            'nota_obtida' => 'required|numeric|min:0',
-        ]);
-
-        $respostaAluno = QuestaoAtividadeAluno::where('questao_id', $questaoId)
-            ->where('aluno_id', $alunoId)
-            ->firstOrFail();
-
-        $respostaAluno->update([
-            'nota_obtida' => $validated['nota_obtida'],
-        ]);
-
-        return back()->with('success', 'Questão corrigida com sucesso!');
-    }
-
-    /**
-     * Professor finaliza a correção de uma atividade para um aluno
-     */
-    public function finalizarCorrecao(Request $request, $id, $alunoId)
-    {
-        $user = auth()->user();
-        $atividade = Atividade::findOrFail($id);
-
-        if (!$atividade->canEdit($user)) {
-            abort(403, 'Você não tem permissão para corrigir esta atividade.');
-        }
-
-        $validated = $request->validate([
-            'comentario_professor' => 'nullable|string',
-        ]);
-
-        $atividadeAluno = AtividadeAluno::where('atividade_id', $id)
-            ->where('aluno_id', $alunoId)
-            ->firstOrFail();
-
-        $atividadeAluno->update([
-            'status' => 'corrigido',
-            'data_correcao' => now(),
-            'comentario_professor' => $validated['comentario_professor'] ?? null,
-        ]);
-
-        return back()->with('success', 'Correção finalizada com sucesso!');
-    }
-
-    /**
-     * Lista submissões dos alunos para uma atividade (para professores)
-     */
-    public function submissoes($id)
-    {
-        $user = auth()->user();
-        $atividade = Atividade::with(['tipo', 'turma'])->findOrFail($id);
-
-        if (!$atividade->canEdit($user)) {
-            abort(403, 'Você não tem permissão para ver as submissões desta atividade.');
-        }
-
-        $submissoes = AtividadeAluno::where('atividade_id', $id)
-            ->with('aluno')
-            ->orderBy('status', 'desc')
-            ->orderBy('data_submissao', 'desc')
-            ->get();
-
-        return Inertia::render('Hub/Atividades/Submissoes', [
-            'atividade' => $atividade,
-            'submissoes' => $submissoes,
+        throw ValidationException::withMessages([
+            $fieldPrefix => 'Tipo de bloco inválido.',
         ]);
     }
 
-    /**
-     * Visualiza a submissão de um aluno específico
-     */
-    public function visualizarSubmissao($id, $alunoId)
+    private function normalizeRespostas(array $respostas, Collection $blocos): array
     {
-        $user = auth()->user();
-        $atividade = Atividade::with(['tipo', 'turma', 'questoes'])->findOrFail($id);
+        $normalizadas = [];
+        $erros = [];
 
-        if (!$atividade->canEdit($user)) {
-            abort(403, 'Você não tem permissão para ver esta submissão.');
+        foreach ($blocos as $bloco) {
+            $payload = $respostas[$bloco->id] ?? $respostas[(string) $bloco->id] ?? null;
+            $fieldPrefix = "respostas.{$bloco->id}";
+
+            if (!is_array($payload)) {
+                $erros[$fieldPrefix] = 'Responda este bloco.';
+                continue;
+            }
+
+            $normalizadas[$bloco->id] = $this->normalizeRespostaBloco($bloco, $payload, $fieldPrefix);
         }
 
-        $atividadeAluno = AtividadeAluno::where('atividade_id', $id)
-            ->where('aluno_id', $alunoId)
-            ->with('aluno')
-            ->firstOrFail();
+        if (!empty($erros)) {
+            throw ValidationException::withMessages($erros);
+        }
 
-        $respostas = QuestaoAtividadeAluno::where('aluno_id', $alunoId)
-            ->whereIn('questao_id', $atividade->questoes->pluck('id'))
+        return $normalizadas;
+    }
+
+    private function normalizeRespostaBloco(AtividadeBloco $bloco, array $payload, string $fieldPrefix): array
+    {
+        if (in_array($bloco->tipo, [AtividadeBloco::TIPO_TRADUCAO, AtividadeBloco::TIPO_COMPLETE])) {
+            $texto = trim((string) ($payload['texto'] ?? ''));
+
+            if ($texto === '') {
+                throw ValidationException::withMessages([
+                    "{$fieldPrefix}.texto" => 'Informe sua resposta.',
+                ]);
+            }
+
+            return ['texto' => $texto];
+        }
+
+        if ($bloco->tipo === AtividadeBloco::TIPO_PERGUNTA_RESPOSTA) {
+            $respostas = [];
+            $perguntas = $bloco->conteudo['perguntas'] ?? [];
+
+            foreach ($perguntas as $index => $pergunta) {
+                $texto = trim((string) ($payload['respostas'][$index]['resposta'] ?? ''));
+
+                if ($texto === '') {
+                    throw ValidationException::withMessages([
+                        "{$fieldPrefix}.respostas.{$index}.resposta" => 'Responda todas as perguntas.',
+                    ]);
+                }
+
+                $respostas[] = [
+                    'pergunta_index' => $index,
+                    'resposta' => $texto,
+                ];
+            }
+
+            return ['respostas' => $respostas];
+        }
+
+        if ($bloco->tipo === AtividadeBloco::TIPO_ALTERNATIVA) {
+            $respostas = [];
+            $perguntas = $bloco->conteudo['perguntas'] ?? [];
+
+            foreach ($perguntas as $index => $pergunta) {
+                $selected = $payload['respostas'][$index]['opcao_selecionada_index'] ?? null;
+
+                if ($selected === null || $selected === '') {
+                    throw ValidationException::withMessages([
+                        "{$fieldPrefix}.respostas.{$index}.opcao_selecionada_index" => 'Selecione uma opção em todas as perguntas.',
+                    ]);
+                }
+
+                $selected = (int) $selected;
+                $opcoes = $pergunta['opcoes'] ?? [];
+
+                if (!array_key_exists($selected, $opcoes)) {
+                    throw ValidationException::withMessages([
+                        "{$fieldPrefix}.respostas.{$index}.opcao_selecionada_index" => 'Opção selecionada inválida.',
+                    ]);
+                }
+
+                $respostas[] = [
+                    'pergunta_index' => $index,
+                    'opcao_selecionada_index' => $selected,
+                ];
+            }
+
+            return ['respostas' => $respostas];
+        }
+
+        throw ValidationException::withMessages([
+            $fieldPrefix => 'Tipo de bloco inválido.',
+        ]);
+    }
+
+    private function syncBlocos(Atividade $atividade, array $blocos): void
+    {
+        $atividade->blocos()->delete();
+
+        foreach ($blocos as $bloco) {
+            $atividade->blocos()->create($bloco);
+        }
+    }
+
+    private function syncAtividadeAlunos(Atividade $atividade, TurmaCriada $turma): void
+    {
+        $atividade->atividadeAlunos()->delete();
+
+        $now = now();
+        $registros = collect($turma->alunos ?? [])
+            ->map(fn ($alunoId) => (int) $alunoId)
+            ->filter()
+            ->unique()
+            ->map(fn ($alunoId) => [
+                'atividade_id' => $atividade->id,
+                'aluno_id' => $alunoId,
+                'status' => AtividadeAluno::STATUS_PENDENTE,
+                'data_submissao' => null,
+                'nota_total' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])
+            ->values()
+            ->all();
+
+        if (!empty($registros)) {
+            AtividadeAluno::insert($registros);
+        }
+    }
+
+    private function availableTurmas(User $user): Collection
+    {
+        $userType = $user->userType->name;
+
+        return TurmaCriada::with(['turma', 'professor'])
+            ->when($userType === 'professor', fn ($query) => $query->where('professor_id', $user->id))
+            ->where('status', '!=', 'encerrada')
+            ->orderBy('status')
+            ->latest()
             ->get()
-            ->keyBy('questao_id');
+            ->map(fn (TurmaCriada $turma) => $this->serializeTurma($turma));
+    }
 
-        return Inertia::render('Hub/Atividades/VisualizarSubmissao', [
-            'atividade' => $atividade,
-            'atividadeAluno' => $atividadeAluno,
-            'respostas' => $respostas,
+    private function ensureCanManageTurma(User $user, TurmaCriada $turma): void
+    {
+        $userType = $user->userType->name;
+
+        if (in_array($userType, ['root', 'admin'])) {
+            return;
+        }
+
+        if ($userType === 'professor' && $turma->professor_id === $user->id) {
+            return;
+        }
+
+        abort(403, 'Você não tem permissão para gerenciar atividades nesta turma.');
+    }
+
+    private function ensureTurmaAberta(TurmaCriada $turma): void
+    {
+        if ($turma->status === 'em andamento') {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'turma_criada_id' => 'Não é possível criar ou alterar atividades para turmas bloqueadas ou encerradas.',
         ]);
+    }
+
+    private function serializeAtividadeResumo(Atividade $atividade, User $user): array
+    {
+        $minhaEntrega = $atividade->relationLoaded('atividadeAlunos')
+            ? $atividade->atividadeAlunos->firstWhere('aluno_id', $user->id)
+            : null;
+
+        return [
+            'id' => $atividade->id,
+            'titulo' => $atividade->titulo,
+            'descricao' => $atividade->descricao,
+            'instrucoes' => $atividade->instrucoes,
+            'nota_max' => $atividade->nota_max,
+            'data_entrega' => optional($atividade->data_entrega)->toIso8601String(),
+            'turma_criada' => $this->serializeTurma($atividade->turmaCriada),
+            'professor' => $this->serializeUser($atividade->professor),
+            'total_alunos_count' => $atividade->total_alunos_count ?? 0,
+            'pendentes_count' => $atividade->pendentes_count ?? 0,
+            'entregues_count' => $atividade->entregues_count ?? 0,
+            'minha_entrega' => $minhaEntrega ? $this->serializeAtividadeAluno($minhaEntrega) : null,
+        ];
+    }
+
+    private function serializeAtividadeDetalhe(Atividade $atividade, User $user): array
+    {
+        return [
+            'id' => $atividade->id,
+            'turma_criada_id' => $atividade->turma_criada_id,
+            'professor_id' => $atividade->professor_id,
+            'titulo' => $atividade->titulo,
+            'descricao' => $atividade->descricao,
+            'instrucoes' => $atividade->instrucoes,
+            'nota_max' => $atividade->nota_max,
+            'data_entrega' => optional($atividade->data_entrega)->toIso8601String(),
+            'turma_criada' => $this->serializeTurma($atividade->turmaCriada),
+            'professor' => $this->serializeUser($atividade->professor),
+            'blocos' => $atividade->blocos->map(fn (AtividadeBloco $bloco) => [
+                'id' => $bloco->id,
+                'tipo' => $bloco->tipo,
+                'ordem' => $bloco->ordem,
+                'titulo' => $bloco->titulo,
+                'conteudo' => $bloco->conteudo,
+            ])->values(),
+            'pode_editar' => $atividade->canEdit($user),
+            'pode_editar_estrutura' => $atividade->canEdit($user) && !$atividade->hasEntregas(),
+        ];
+    }
+
+    private function serializeAtividadeAluno(AtividadeAluno $atividadeAluno): array
+    {
+        return [
+            'id' => $atividadeAluno->id,
+            'atividade_id' => $atividadeAluno->atividade_id,
+            'aluno_id' => $atividadeAluno->aluno_id,
+            'aluno' => $this->serializeUser($atividadeAluno->aluno),
+            'status' => $atividadeAluno->status,
+            'data_submissao' => optional($atividadeAluno->data_submissao)->toIso8601String(),
+            'nota_total' => $atividadeAluno->nota_total,
+        ];
+    }
+
+    private function serializeEstatisticas(Atividade $atividade): array
+    {
+        return [
+            'total_alunos' => $atividade->atividadeAlunos->count(),
+            'pendentes' => $atividade->atividadeAlunos->where('status', AtividadeAluno::STATUS_PENDENTE)->count(),
+            'entregues' => $atividade->atividadeAlunos->where('status', AtividadeAluno::STATUS_ENTREGUE)->count(),
+        ];
+    }
+
+    private function serializeTurma(?TurmaCriada $turma): ?array
+    {
+        if (!$turma) {
+            return null;
+        }
+
+        return [
+            'id' => $turma->id,
+            'status' => $turma->status,
+            'total_alunos' => count($turma->alunos ?? []),
+            'turma' => [
+                'id' => $turma->turma?->id,
+                'nome' => $turma->turma->nome ?? "Turma #{$turma->id}",
+            ],
+            'professor' => $this->serializeUser($turma->professor),
+        ];
+    }
+
+    private function serializeUser(?User $user): ?array
+    {
+        if (!$user) {
+            return null;
+        }
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+        ];
     }
 }

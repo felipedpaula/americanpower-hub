@@ -36,7 +36,9 @@ const formatDataEntrega = (value) => {
     if (!value) return 'Sem data';
     try {
         const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? 'Sem data' : date.toLocaleDateString();
+        return Number.isNaN(date.getTime())
+            ? 'Sem data'
+            : date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
     } catch {
         return 'Sem data';
     }
@@ -190,11 +192,10 @@ export default function ShowTurma({ turma, alunos = [], atividades = [], userTyp
                                                     {atividade.titulo}
                                                 </h3>
                                                 <p className="text-sm text-muted-foreground">
-                                                    {atividade.tipo?.nome ?? 'Sem tipo definido'}
+                                                    {atividade.entregues_count ?? 0} entregue(s) | {atividade.pendentes_count ?? 0} pendente(s)
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                                                <Badge variant="secondary">{atividade.status}</Badge>
                                                 <span>Entrega: {formatDataEntrega(atividade.data_entrega)}</span>
                                                 <span>Nota máx.: {atividade.nota_max ?? '—'}</span>
                                             </div>

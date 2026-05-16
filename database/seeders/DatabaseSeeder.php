@@ -15,7 +15,6 @@ class DatabaseSeeder extends Seeder
         $this->call(UserTypesSeeder::class);
         $this->call(UsersSeeder::class);
         $this->call(TurmasSeeder::class);
-        $this->call(AtividadeTiposSeeder::class);
         $this->call(SettingsSeeder::class);
 
         // \App\Models\User::factory(10)->create();

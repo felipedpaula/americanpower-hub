@@ -55,9 +55,21 @@ class User extends Authenticatable
         return $this->hasMany(AtividadeAluno::class, 'aluno_id');
     }
 
-    public function respostasQuestoes()
+    public function atividadesProfessor()
     {
-        return $this->hasMany(QuestaoAtividadeAluno::class, 'aluno_id');
+        return $this->hasMany(Atividade::class, 'professor_id');
+    }
+
+    public function respostasAtividades()
+    {
+        return $this->hasManyThrough(
+            AtividadeResposta::class,
+            AtividadeAluno::class,
+            'aluno_id',
+            'atividade_aluno_id',
+            'id',
+            'id'
+        );
     }
 
     public function financeiroAlunos()

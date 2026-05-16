@@ -84,20 +84,21 @@ class TurmaController extends Controller
                 });
         }
 
-        $atividades = Atividade::with('tipo')
-            ->where('turma_id', $turma->id)
+        $atividades = Atividade::withCount([
+                'atividadeAlunos as pendentes_count' => fn ($query) => $query->where('status', 'pendente'),
+                'atividadeAlunos as entregues_count' => fn ($query) => $query->where('status', 'entregue'),
+            ])
+            ->where('turma_criada_id', $turma->id)
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($atividade) {
                 return [
                     'id' => $atividade->id,
                     'titulo' => $atividade->titulo,
-                    'status' => $atividade->status ?? 'sem status',
                     'nota_max' => $atividade->nota_max,
-                    'data_entrega' => optional($atividade->data_entrega)->format('Y-m-d'),
-                    'tipo' => [
-                        'nome' => $atividade->tipo->nome ?? $atividade->tipo->titulo ?? 'Não definido',
-                    ],
+                    'data_entrega' => optional($atividade->data_entrega)->toIso8601String(),
+                    'pendentes_count' => $atividade->pendentes_count ?? 0,
+                    'entregues_count' => $atividade->entregues_count ?? 0,
                 ];
             });
 

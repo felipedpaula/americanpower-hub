@@ -1,74 +1,92 @@
 /** @jsxImportSource react */
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 import HubLayout from '@/Layouts/HubLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { useMemo, useState } from 'react';
 
-const inputClass = "mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring";
+const inputClass = "mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
 
-const formatDate = (value) => {
-    if (!value) return '—';
-
-    try {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return '—';
-        return date.toLocaleDateString();
-    } catch (error) {
-        return '—';
-    }
+const tipoLabels = {
+    traducao: 'Tradução',
+    complete: 'Completar lacunas',
+    pergunta_resposta: 'Perguntas abertas',
+    alternativa: 'Alternativas',
 };
 
-export default function ShowAtividade({ atividade, estatisticas, atividadeAluno, respostasAluno }) {
+const formatDateTime = (value) => {
+    if (!value) return 'Sem prazo';
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Sem prazo';
+
+    return date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+};
+
+const statusVariant = (status) => {
+    if (status === 'entregue') return 'default';
+    if (status === 'pendente') return 'secondary';
+    return 'outline';
+};
+
+const defaultResposta = (bloco) => {
+    if (bloco.tipo === 'pergunta_resposta') {
+        return {
+            respostas: (bloco.conteudo?.perguntas ?? []).map((_, index) => ({
+                pergunta_index: index,
+                resposta: '',
+            })),
+        };
+    }
+
+    if (bloco.tipo === 'alternativa') {
+        return {
+            respostas: (bloco.conteudo?.perguntas ?? []).map((_, index) => ({
+                pergunta_index: index,
+                opcao_selecionada_index: '',
+            })),
+        };
+    }
+
+    return { texto: '' };
+};
+
+const buildInitialRespostas = (blocos = [], respostasAluno = {}) => {
+    return blocos.reduce((acc, bloco) => {
+        acc[bloco.id] = respostasAluno?.[bloco.id] ?? respostasAluno?.[String(bloco.id)] ?? defaultResposta(bloco);
+        return acc;
+    }, {});
+};
+
+export default function ShowAtividade({
+    atividade,
+    estatisticas,
+    atividadeAluno,
+    respostasAluno = {},
+    alunos = [],
+}) {
     const { props } = usePage();
     const userType = props.user?.type || props.auth?.user?.user_type?.name;
-    const canManageBase = ['professor', 'admin', 'root'].includes(userType);
-    const turmaStatus = atividade?.turma?.status;
-    const canManage = canManageBase && turmaStatus === 'em andamento';
     const flash = props.flash || {};
+    const pageErrors = props.errors || {};
+    const isAluno = userType === 'aluno';
+    const canManage = ['professor', 'admin', 'root'].includes(userType);
+    const blocos = atividade?.blocos ?? [];
 
-    const questoes = useMemo(() => atividade?.questoes ?? [], [atividade?.questoes]);
-
-    const [editingQuestaoId, setEditingQuestaoId] = useState(null);
-    const questaoForm = useForm({
-        enunciado: '',
-        valor: '',
-        status: 'ativa',
-        resposta_esperada: '',
+    const respostaForm = useForm({
+        respostas: buildInitialRespostas(blocos, respostasAluno),
     });
 
-    const startEditingQuestao = (questao) => {
-        setEditingQuestaoId(questao.id);
-        questaoForm.setData((data) => ({
-            ...data,
-            enunciado: questao.enunciado ?? '',
-            valor: questao.valor ?? '',
-            status: questao.status ?? 'ativa',
-            resposta_esperada: questao.resposta_esperada ?? '',
-        }));
-        questaoForm.clearErrors();
-    };
-
-    const cancelEditingQuestao = () => {
-        setEditingQuestaoId(null);
-        questaoForm.reset();
-        questaoForm.clearErrors();
-    };
-
-    const handleUpdateQuestao = (event) => {
-        event.preventDefault();
-        if (!editingQuestaoId) return;
-
-        questaoForm.put(`/hub/atividades/${atividade.id}/questoes/${editingQuestaoId}`, {
-            preserveScroll: true,
-            onSuccess: () => {
-                cancelEditingQuestao();
-            },
-        });
-    };
+    const [notas, setNotas] = useState(() => (
+        alunos.reduce((acc, alunoEntrega) => {
+            acc[alunoEntrega.aluno_id] = alunoEntrega.nota_total ?? '';
+            return acc;
+        }, {})
+    ));
+    const [notaProcessing, setNotaProcessing] = useState(null);
 
     if (!atividade) {
         return (
@@ -78,18 +96,41 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
                     <h1 className="text-lg font-semibold text-foreground">
                         Não foi possível carregar esta atividade.
                     </h1>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                        Verifique se você possui acesso e tente novamente.
-                    </p>
-                    <div className="mt-4">
-                        <Link href="/hub/atividades">
-                            <Button variant="outline">Voltar para atividades</Button>
-                        </Link>
-                    </div>
+                    <Link href="/hub/atividades" className="mt-4 inline-block">
+                        <Button variant="outline">Voltar para atividades</Button>
+                    </Link>
                 </div>
             </HubLayout>
         );
     }
+
+    const updateResposta = (blocoId, resposta) => {
+        respostaForm.setData('respostas', {
+            ...respostaForm.data.respostas,
+            [blocoId]: resposta,
+        });
+    };
+
+    const submitRespostas = (event) => {
+        event.preventDefault();
+        respostaForm.post(`/hub/atividades/${atividade.id}/submeter`, {
+            preserveScroll: true,
+        });
+    };
+
+    const submitNota = (alunoId) => {
+        setNotaProcessing(alunoId);
+        router.put(
+            `/hub/atividades/${atividade.id}/alunos/${alunoId}/nota`,
+            { nota_total: notas[alunoId] === '' ? null : notas[alunoId] },
+            {
+                preserveScroll: true,
+                onFinish: () => setNotaProcessing(null),
+            }
+        );
+    };
+
+    const delivered = atividadeAluno?.status === 'entregue';
 
     return (
         <HubLayout>
@@ -99,33 +140,24 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">{atividade.titulo}</h1>
-                        <p className="text-muted-foreground text-sm">
-                            {atividade.turma?.turma?.nome ?? 'Turma não informada'}
+                        <p className="text-sm text-muted-foreground">
+                            {atividade.turma_criada?.turma?.nome ?? 'Turma não informada'}
                         </p>
-                        {turmaStatus && turmaStatus !== 'em andamento' && (
-                            <p className="text-xs text-orange-600">
-                                Esta turma está {turmaStatus}. Atividades e questões permanecem somente para consulta.
-                            </p>
-                        )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Link href="/hub/atividades">
-                            <Button variant="outline" type="button">
-                                Voltar
-                            </Button>
+                            <Button variant="outline" type="button">Voltar</Button>
                         </Link>
-                        {canManage && (
+                        {atividade.pode_editar && (
                             <Link href={`/hub/atividades/${atividade.id}/edit`}>
-                                <Button type="button">
-                                    Editar atividade
-                                </Button>
+                                <Button type="button">Editar atividade</Button>
                             </Link>
                         )}
                     </div>
                 </div>
 
-                {(flash.success || flash.error) && (
+                {(flash.success || flash.error || respostaForm.errors.error || pageErrors.error || pageErrors.nota_total) && (
                     <div
                         className={`rounded-md border p-4 text-sm ${
                             flash.success
@@ -133,283 +165,401 @@ export default function ShowAtividade({ atividade, estatisticas, atividadeAluno,
                                 : 'border-destructive/40 bg-destructive/10 text-destructive'
                         }`}
                     >
-                        {flash.success ?? flash.error}
+                        {flash.success ?? flash.error ?? respostaForm.errors.error ?? pageErrors.error ?? pageErrors.nota_total}
                     </div>
                 )}
 
                 <div className="grid gap-6 md:grid-cols-3">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Informações Gerais</CardTitle>
+                            <CardTitle>Informações</CardTitle>
                             <CardDescription>Dados principais da atividade</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3 text-sm">
-                            <div>
-                                <span className="text-muted-foreground">Tipo</span>
-                                <p className="font-medium text-foreground">
-                                    {atividade.tipo?.nome ?? 'Não definido'}
-                                </p>
-                            </div>
-                            <div>
-                                <span className="text-muted-foreground">Professor Responsável</span>
-                                <p className="font-medium text-foreground">
-                                    {atividade.turma?.professor?.name ?? 'Não informado'}
-                                </p>
-                            </div>
-                            <div>
-                                <span className="text-muted-foreground">Data de Entrega</span>
-                                <p className="font-medium text-foreground">
-                                    {formatDate(atividade.data_entrega)}
-                                </p>
-                            </div>
-                            <div>
-                                <span className="text-muted-foreground">Nota máxima</span>
-                                <p className="font-medium text-foreground">
-                                    {atividade.nota_max ?? '—'}
-                                </p>
-                            </div>
+                            <InfoLine label="Professor" value={atividade.professor?.name ?? atividade.turma_criada?.professor?.name ?? 'Não informado'} />
+                            <InfoLine label="Prazo" value={formatDateTime(atividade.data_entrega)} />
+                            <InfoLine label="Nota máxima" value={atividade.nota_max ?? '—'} />
+                            {atividadeAluno && (
+                                <>
+                                    <div>
+                                        <span className="text-muted-foreground">Status</span>
+                                        <div className="mt-1">
+                                            <Badge variant={statusVariant(atividadeAluno.status)}>
+                                                {atividadeAluno.status}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                    <InfoLine label="Nota final" value={atividadeAluno.nota_total ?? '—'} />
+                                    <InfoLine label="Entregue em" value={formatDateTime(atividadeAluno.data_submissao)} />
+                                </>
+                            )}
                         </CardContent>
                     </Card>
 
                     <Card className="md:col-span-2">
                         <CardHeader>
-                            <CardTitle>Descrição</CardTitle>
-                            <CardDescription>Orientações para os alunos</CardDescription>
+                            <CardTitle>Orientações</CardTitle>
+                            <CardDescription>Descrição e instruções do professor</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            {atividade.descricao ? (
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-                                    {atividade.descricao}
-                                </p>
-                            ) : (
-                                <p className="text-sm text-muted-foreground">
-                                    Nenhuma descrição fornecida.
-                                </p>
-                            )}
+                        <CardContent className="space-y-4 text-sm">
+                            <TextBlock label="Descrição" value={atividade.descricao} empty="Nenhuma descrição fornecida." />
+                            <TextBlock label="Instruções" value={atividade.instrucoes} empty="Nenhuma instrução adicional." />
                         </CardContent>
                     </Card>
                 </div>
 
                 {canManage && estatisticas && (
-                    <div className="grid gap-4 md:grid-cols-4">
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardDescription>Total de alunos</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-bold text-foreground">
-                                    {estatisticas.total_alunos ?? 0}
-                                </p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardDescription>Enviaram</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-bold text-foreground">
-                                    {estatisticas.enviados ?? 0}
-                                </p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardDescription>Corrigidos</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-bold text-foreground">
-                                    {estatisticas.corrigidos ?? 0}
-                                </p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardDescription>Pendentes</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-bold text-foreground">
-                                    {estatisticas.pendentes ?? 0}
-                                </p>
-                            </CardContent>
-                        </Card>
+                    <div className="grid gap-4 md:grid-cols-3">
+                        <StatCard label="Total de alunos" value={estatisticas.total_alunos ?? 0} />
+                        <StatCard label="Entregues" value={estatisticas.entregues ?? 0} />
+                        <StatCard label="Pendentes" value={estatisticas.pendentes ?? 0} />
                     </div>
                 )}
 
-                <div className="grid gap-6 md:grid-cols-2">
-                    <Card className="md:col-span-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Blocos da atividade</CardTitle>
+                        <CardDescription>
+                            {isAluno
+                                ? delivered ? 'Suas respostas ficam disponíveis para consulta.' : 'Responda todos os blocos antes de entregar.'
+                                : 'Conteúdo publicado para os alunos.'}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {blocos.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Nenhum bloco cadastrado.</p>
+                        ) : isAluno ? (
+                            <form onSubmit={submitRespostas} className="space-y-5">
+                                {blocos.map((bloco) => (
+                                    <AtividadeBlocoCard key={bloco.id} bloco={bloco}>
+                                        <RespostaEditor
+                                            bloco={bloco}
+                                            resposta={respostaForm.data.respostas[bloco.id] ?? defaultResposta(bloco)}
+                                            errors={respostaForm.errors}
+                                            disabled={delivered}
+                                            onChange={(resposta) => updateResposta(bloco.id, resposta)}
+                                        />
+                                    </AtividadeBlocoCard>
+                                ))}
+
+                                {!delivered && (
+                                    <div className="flex justify-end">
+                                        <Button type="submit" disabled={respostaForm.processing}>
+                                            {respostaForm.processing ? 'Entregando...' : 'Entregar atividade'}
+                                        </Button>
+                                    </div>
+                                )}
+                            </form>
+                        ) : (
+                            <div className="space-y-5">
+                                {blocos.map((bloco) => (
+                                    <AtividadeBlocoCard key={bloco.id} bloco={bloco} />
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {canManage && (
+                    <Card>
                         <CardHeader>
-                            <CardTitle>Questões da atividade</CardTitle>
+                            <CardTitle>Entregas e notas</CardTitle>
                             <CardDescription>
-                                {questoes.length > 0
-                                    ? 'Gerencie o conteúdo que os alunos deverão responder'
-                                    : 'Nenhuma questão cadastrada ainda'}
+                                Lance a nota final manualmente após a entrega do aluno.
                             </CardDescription>
-                            {canManage && (
-                                <div className="mt-4 flex justify-end">
-                                    <Link href={`/hub/atividades/${atividade.id}/questoes/create`}>
-                                        <Button type="button">Adicionar questão</Button>
-                                    </Link>
-                                </div>
-                            )}
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            {questoes.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                    Assim que você adicionar questões, elas aparecerão aqui.
-                                </p>
+                        <CardContent>
+                            {alunos.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Nenhum aluno vinculado a esta atividade.</p>
                             ) : (
-                                <div className="space-y-4">
-                                    {questoes.map((questao, index) => (
+                                <div className="space-y-3">
+                                    {alunos.map((alunoEntrega) => (
                                         <div
-                                            key={questao.id}
-                                            className="rounded-lg border border-border p-4"
+                                            key={alunoEntrega.id}
+                                            className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-[1fr_auto] md:items-center"
                                         >
-                                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center gap-3">
-                                                        <Badge variant="secondary">
-                                                            Questão {index + 1}
-                                                        </Badge>
-                                                        <Badge variant={questao.status === 'anulada' ? 'destructive' : 'default'}>
-                                                            {questao.status ?? 'ativa'}
-                                                        </Badge>
-                                                        <Badge variant="outline">
-                                                            Valor: {questao.valor ?? 0}
-                                                        </Badge>
-                                                    </div>
-                                                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                                                        {questao.enunciado}
+                                            <div className="space-y-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <p className="font-medium text-foreground">
+                                                        {alunoEntrega.aluno?.name ?? `Aluno #${alunoEntrega.aluno_id}`}
                                                     </p>
-                                                    {questao.resposta_esperada && (
-                                                        <div className="rounded-md bg-muted/60 p-3">
-                                                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                                Resposta esperada
-                                                            </p>
-                                                            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-                                                                {questao.resposta_esperada}
-                                                            </p>
-                                                        </div>
-                                                    )}
+                                                    <Badge variant={statusVariant(alunoEntrega.status)}>
+                                                        {alunoEntrega.status}
+                                                    </Badge>
                                                 </div>
-                                                {canManage && editingQuestaoId !== questao.id && (
-                                                    <div className="flex gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => startEditingQuestao(questao)}
-                                                        >
-                                                            Editar
-                                                        </Button>
-                                                    </div>
-                                                )}
+                                                <p className="text-sm text-muted-foreground">
+                                                    Entregue em: {formatDateTime(alunoEntrega.data_submissao)}
+                                                </p>
                                             </div>
-                                            {canManage && editingQuestaoId === questao.id && (
-                                                <form
-                                                    onSubmit={handleUpdateQuestao}
-                                                    className="mt-4 space-y-4 rounded-md border border-dashed border-border p-4"
+
+                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                                                <div className="w-full sm:w-36">
+                                                    <Label htmlFor={`nota-${alunoEntrega.aluno_id}`}>Nota final</Label>
+                                                    <Input
+                                                        id={`nota-${alunoEntrega.aluno_id}`}
+                                                        type="number"
+                                                        min="0"
+                                                        max={atividade.nota_max}
+                                                        step="0.01"
+                                                        value={notas[alunoEntrega.aluno_id] ?? ''}
+                                                        onChange={(event) => setNotas({
+                                                            ...notas,
+                                                            [alunoEntrega.aluno_id]: event.target.value,
+                                                        })}
+                                                        disabled={alunoEntrega.status !== 'entregue'}
+                                                    />
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    onClick={() => submitNota(alunoEntrega.aluno_id)}
+                                                    disabled={alunoEntrega.status !== 'entregue' || notaProcessing === alunoEntrega.aluno_id}
                                                 >
-                                                    <div>
-                                                        <Label htmlFor={`enunciado-${questao.id}`}>Enunciado</Label>
-                                                        <textarea
-                                                            id={`enunciado-${questao.id}`}
-                                                            value={questaoForm.data.enunciado}
-                                                            onChange={(event) =>
-                                                                questaoForm.setData('enunciado', event.target.value)
-                                                            }
-                                                            placeholder="Atualize o enunciado da questão"
-                                                            className={`${inputClass} min-h-[120px] resize-y`}
-                                                        />
-                                                        {questaoForm.errors.enunciado && (
-                                                            <p className="mt-2 text-sm text-destructive">
-                                                                {questaoForm.errors.enunciado}
-                                                            </p>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="grid gap-4 md:grid-cols-2">
-                                                        <div>
-                                                            <Label htmlFor={`valor-${questao.id}`}>Valor da questão</Label>
-                                                            <Input
-                                                                id={`valor-${questao.id}`}
-                                                                type="number"
-                                                                min="0"
-                                                                step="0.01"
-                                                                value={questaoForm.data.valor}
-                                                                onChange={(event) =>
-                                                                    questaoForm.setData('valor', event.target.value)
-                                                                }
-                                                                placeholder="Ex: 2"
-                                                            />
-                                                            {questaoForm.errors.valor && (
-                                                                <p className="mt-2 text-sm text-destructive">
-                                                                    {questaoForm.errors.valor}
-                                                                </p>
-                                                            )}
-                                                        </div>
-
-                                                        <div>
-                                                            <Label htmlFor={`status-${questao.id}`}>Status</Label>
-                                                            <select
-                                                                id={`status-${questao.id}`}
-                                                                value={questaoForm.data.status}
-                                                                onChange={(event) =>
-                                                                    questaoForm.setData('status', event.target.value)
-                                                                }
-                                                                className={inputClass}
-                                                            >
-                                                                <option value="ativa">Ativa</option>
-                                                                <option value="anulada">Anulada</option>
-                                                            </select>
-                                                            {questaoForm.errors.status && (
-                                                                <p className="mt-2 text-sm text-destructive">
-                                                                    {questaoForm.errors.status}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    <div>
-                                                        <Label htmlFor={`resposta_esperada-${questao.id}`}>Resposta esperada (opcional)</Label>
-                                                        <textarea
-                                                            id={`resposta_esperada-${questao.id}`}
-                                                            value={questaoForm.data.resposta_esperada}
-                                                            onChange={(event) =>
-                                                                questaoForm.setData('resposta_esperada', event.target.value)
-                                                            }
-                                                            placeholder="Atualize a resposta de referência desta questão"
-                                                            className={`${inputClass} min-h-[120px] resize-y`}
-                                                        />
-                                                        {questaoForm.errors.resposta_esperada && (
-                                                            <p className="mt-2 text-sm text-destructive">
-                                                                {questaoForm.errors.resposta_esperada}
-                                                            </p>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            onClick={cancelEditingQuestao}
-                                                            disabled={questaoForm.processing}
-                                                        >
-                                                            Cancelar
-                                                        </Button>
-                                                        <Button type="submit" disabled={questaoForm.processing}>
-                                                            {questaoForm.processing ? 'Salvando...' : 'Salvar alterações'}
-                                                        </Button>
-                                                    </div>
-                                                </form>
-                                            )}
+                                                    {notaProcessing === alunoEntrega.aluno_id ? 'Salvando...' : 'Salvar nota'}
+                                                </Button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             )}
                         </CardContent>
                     </Card>
-                </div>
+                )}
             </div>
         </HubLayout>
+    );
+}
+
+function InfoLine({ label, value }) {
+    return (
+        <div>
+            <span className="text-muted-foreground">{label}</span>
+            <p className="font-medium text-foreground">{value}</p>
+        </div>
+    );
+}
+
+function TextBlock({ label, value, empty }) {
+    return (
+        <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+            {value ? (
+                <p className="mt-1 whitespace-pre-wrap leading-relaxed text-foreground">{value}</p>
+            ) : (
+                <p className="mt-1 text-muted-foreground">{empty}</p>
+            )}
+        </div>
+    );
+}
+
+function StatCard({ label, value }) {
+    return (
+        <Card>
+            <CardHeader className="pb-2">
+                <CardDescription>{label}</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <p className="text-3xl font-bold text-foreground">{value}</p>
+            </CardContent>
+        </Card>
+    );
+}
+
+function AtividadeBlocoCard({ bloco, children }) {
+    return (
+        <div className="rounded-lg border border-border p-4">
+            <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">Bloco {bloco.ordem}</Badge>
+                <Badge variant="outline">{tipoLabels[bloco.tipo] ?? bloco.tipo}</Badge>
+                {bloco.titulo && (
+                    <span className="text-sm font-medium text-foreground">{bloco.titulo}</span>
+                )}
+            </div>
+
+            <div className="mt-4">
+                <BlocoConteudo bloco={bloco} />
+            </div>
+
+            {children && (
+                <div className="mt-4 border-t border-border pt-4">
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function BlocoConteudo({ bloco }) {
+    if (bloco.tipo === 'pergunta_resposta') {
+        return (
+            <ol className="list-decimal space-y-2 pl-5 text-sm text-foreground">
+                {(bloco.conteudo?.perguntas ?? []).map((pergunta, index) => (
+                    <li key={index}>{pergunta}</li>
+                ))}
+            </ol>
+        );
+    }
+
+    if (bloco.tipo === 'alternativa') {
+        return (
+            <div className="space-y-4">
+                {(bloco.conteudo?.perguntas ?? []).map((pergunta, index) => (
+                    <div key={index} className="space-y-2">
+                        <p className="text-sm font-medium text-foreground">{pergunta.pergunta}</p>
+                        <ul className="space-y-1 text-sm text-muted-foreground">
+                            {(pergunta.opcoes ?? []).map((opcao, opcaoIndex) => (
+                                <li key={opcaoIndex}>{opcaoIndex + 1}. {opcao}</li>
+                            ))}
+                        </ul>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    return (
+        <div className="rounded-md bg-muted/60 p-3">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                {bloco.conteudo?.texto}
+            </p>
+        </div>
+    );
+}
+
+function RespostaEditor({ bloco, resposta, errors, disabled, onChange }) {
+    if (disabled) {
+        return <RespostaReadOnly bloco={bloco} resposta={resposta} />;
+    }
+
+    if (bloco.tipo === 'pergunta_resposta') {
+        const respostas = resposta.respostas ?? defaultResposta(bloco).respostas;
+
+        const updateResposta = (index, value) => {
+            onChange({
+                respostas: respostas.map((item, currentIndex) => (
+                    currentIndex === index ? { ...item, resposta: value } : item
+                )),
+            });
+        };
+
+        return (
+            <div className="space-y-4">
+                {(bloco.conteudo?.perguntas ?? []).map((pergunta, index) => (
+                    <div key={index}>
+                        <Label htmlFor={`resposta-${bloco.id}-${index}`}>{pergunta}</Label>
+                        <textarea
+                            id={`resposta-${bloco.id}-${index}`}
+                            value={respostas[index]?.resposta ?? ''}
+                            onChange={(event) => updateResposta(index, event.target.value)}
+                            className={`${inputClass} min-h-[90px] resize-y`}
+                            placeholder="Digite sua resposta"
+                        />
+                        {errors[`respostas.${bloco.id}.respostas.${index}.resposta`] && (
+                            <p className="mt-2 text-sm text-destructive">
+                                {errors[`respostas.${bloco.id}.respostas.${index}.resposta`]}
+                            </p>
+                        )}
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    if (bloco.tipo === 'alternativa') {
+        const respostas = resposta.respostas ?? defaultResposta(bloco).respostas;
+
+        const updateResposta = (index, value) => {
+            onChange({
+                respostas: respostas.map((item, currentIndex) => (
+                    currentIndex === index ? { ...item, opcao_selecionada_index: value } : item
+                )),
+            });
+        };
+
+        return (
+            <div className="space-y-4">
+                {(bloco.conteudo?.perguntas ?? []).map((pergunta, perguntaIndex) => (
+                    <div key={perguntaIndex} className="space-y-2">
+                        <p className="text-sm font-medium text-foreground">{pergunta.pergunta}</p>
+                        {(pergunta.opcoes ?? []).map((opcao, opcaoIndex) => (
+                            <label key={opcaoIndex} className="flex items-center gap-2 text-sm text-foreground">
+                                <input
+                                    type="radio"
+                                    name={`alternativa-${bloco.id}-${perguntaIndex}`}
+                                    value={opcaoIndex}
+                                    checked={String(respostas[perguntaIndex]?.opcao_selecionada_index ?? '') === String(opcaoIndex)}
+                                    onChange={(event) => updateResposta(perguntaIndex, event.target.value)}
+                                />
+                                <span>{opcao}</span>
+                            </label>
+                        ))}
+                        {errors[`respostas.${bloco.id}.respostas.${perguntaIndex}.opcao_selecionada_index`] && (
+                            <p className="text-sm text-destructive">
+                                {errors[`respostas.${bloco.id}.respostas.${perguntaIndex}.opcao_selecionada_index`]}
+                            </p>
+                        )}
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <Label htmlFor={`resposta-${bloco.id}`}>Sua resposta</Label>
+            <textarea
+                id={`resposta-${bloco.id}`}
+                value={resposta.texto ?? ''}
+                onChange={(event) => onChange({ texto: event.target.value })}
+                className={`${inputClass} min-h-[110px] resize-y`}
+                placeholder={bloco.tipo === 'complete' ? 'Digite o trecho que completa a lacuna' : 'Digite sua tradução'}
+            />
+            {errors[`respostas.${bloco.id}.texto`] && (
+                <p className="mt-2 text-sm text-destructive">{errors[`respostas.${bloco.id}.texto`]}</p>
+            )}
+        </div>
+    );
+}
+
+function RespostaReadOnly({ bloco, resposta }) {
+    if (bloco.tipo === 'pergunta_resposta') {
+        return (
+            <div className="space-y-3">
+                {(resposta?.respostas ?? []).map((item, index) => (
+                    <div key={index}>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                            Resposta {index + 1}
+                        </p>
+                        <p className="whitespace-pre-wrap text-sm text-foreground">{item.resposta || '—'}</p>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    if (bloco.tipo === 'alternativa') {
+        return (
+            <div className="space-y-2">
+                {(resposta?.respostas ?? []).map((item, index) => {
+                    const pergunta = bloco.conteudo?.perguntas?.[index];
+                    const opcao = pergunta?.opcoes?.[item.opcao_selecionada_index];
+
+                    return (
+                        <div key={index}>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Seleção {index + 1}
+                            </p>
+                            <p className="text-sm text-foreground">{opcao ?? '—'}</p>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Sua resposta</p>
+            <p className="whitespace-pre-wrap text-sm text-foreground">{resposta?.texto || '—'}</p>
+        </div>
     );
 }

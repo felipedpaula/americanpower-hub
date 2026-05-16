@@ -132,25 +132,13 @@ Route::prefix('hub')->name('hub.')->group(function () {
                 Route::get('/{id}/edit', [AtividadeController::class, 'edit'])->name('edit');
                 Route::put('/{id}', [AtividadeController::class, 'update'])->name('update');
                 Route::delete('/{id}', [AtividadeController::class, 'destroy'])->name('destroy');
-
-                // Gestão de questões
-                Route::get('/{id}/questoes/create', [AtividadeController::class, 'createQuestao'])->name('questoes.create');
-                Route::post('/{id}/questoes', [AtividadeController::class, 'addQuestao'])->name('questoes.store');
-                Route::put('/{id}/questoes/{questaoId}', [AtividadeController::class, 'updateQuestao'])->name('questoes.update');
-                Route::delete('/{id}/questoes/{questaoId}', [AtividadeController::class, 'destroyQuestao'])->name('questoes.destroy');
-
-                // Correção
-                Route::get('/{id}/submissoes', [AtividadeController::class, 'submissoes'])->name('submissoes');
-                Route::get('/{id}/submissoes/{alunoId}', [AtividadeController::class, 'visualizarSubmissao'])->name('submissoes.show');
-                Route::put('/{id}/submissoes/{alunoId}/questoes/{questaoId}', [AtividadeController::class, 'corrigirQuestao'])->name('submissoes.corrigir');
-                Route::post('/{id}/submissoes/{alunoId}/finalizar', [AtividadeController::class, 'finalizarCorrecao'])->name('submissoes.finalizar');
+                Route::put('/{id}/alunos/{alunoId}/nota', [AtividadeController::class, 'atualizarNota'])->name('alunos.nota');
             });
 
             // Rotas gerais (precisam estar depois de rotas específicas)
             Route::get('/{id}', [AtividadeController::class, 'show'])->name('show');
 
             // Rotas para alunos
-            Route::post('/{id}/questoes/{questaoId}/responder', [AtividadeController::class, 'responderQuestao'])->name('questoes.responder');
             Route::post('/{id}/submeter', [AtividadeController::class, 'submeter'])->name('submeter');
         });
     });

@@ -31,6 +31,11 @@ class TurmaCriada extends Model
         return $this->belongsTo(User::class, 'professor_id');
     }
 
+    public function atividades()
+    {
+        return $this->hasMany(Atividade::class, 'turma_criada_id');
+    }
+
     public function alunos()
     {
         return User::whereIn('id', $this->alunos ?? [])->get();

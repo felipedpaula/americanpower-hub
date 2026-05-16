@@ -9,6 +9,13 @@ class AtividadeAluno extends Model
 {
     use HasFactory;
 
+    public const STATUS_PENDENTE = 'pendente';
+    public const STATUS_ENTREGUE = 'entregue';
+    public const STATUS = [
+        self::STATUS_PENDENTE,
+        self::STATUS_ENTREGUE,
+    ];
+
     protected $table = 'atividade_aluno';
 
     protected $fillable = [
@@ -16,14 +23,11 @@ class AtividadeAluno extends Model
         'aluno_id',
         'status',
         'data_submissao',
-        'data_correcao',
         'nota_total',
-        'comentario_professor',
     ];
 
     protected $casts = [
         'data_submissao' => 'datetime',
-        'data_correcao' => 'datetime',
         'nota_total' => 'decimal:2',
     ];
 
@@ -35,5 +39,10 @@ class AtividadeAluno extends Model
     public function aluno()
     {
         return $this->belongsTo(User::class, 'aluno_id');
+    }
+
+    public function respostas()
+    {
+        return $this->hasMany(AtividadeResposta::class, 'atividade_aluno_id');
     }
 }

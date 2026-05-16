@@ -12,32 +12,41 @@ class Atividade extends Model
     protected $table = 'atividade';
 
     protected $fillable = [
-        'tipo_id',
-        'turma_id',
+        'turma_criada_id',
+        'professor_id',
         'titulo',
         'descricao',
+        'instrucoes',
         'nota_max',
         'data_entrega',
     ];
 
     protected $casts = [
-        'data_entrega' => 'date',
+        'data_entrega' => 'datetime',
         'nota_max' => 'decimal:2',
     ];
 
-    public function tipo()
+    public function turmaCriada()
     {
-        return $this->belongsTo(AtividadeTipo::class, 'tipo_id');
+        return $this->belongsTo(TurmaCriada::class, 'turma_criada_id');
     }
 
+    /**
+     * Alias mantido para telas existentes que exibem a turma da atividade.
+     */
     public function turma()
     {
-        return $this->belongsTo(TurmaCriada::class, 'turma_id');
+        return $this->belongsTo(TurmaCriada::class, 'turma_criada_id');
     }
 
-    public function questoes()
+    public function professor()
     {
-        return $this->hasMany(QuestaoAtividade::class, 'atividade_id');
+        return $this->belongsTo(User::class, 'professor_id');
+    }
+
+    public function blocos()
+    {
+        return $this->hasMany(AtividadeBloco::class, 'atividade_id')->orderBy('ordem');
     }
 
     public function atividadeAlunos()
@@ -52,20 +61,34 @@ class Atividade extends Model
     {
         $userType = $user->userType->name;
 
-        // Admin e Root têm acesso total
         if (in_array($userType, ['root', 'admin'])) {
             return true;
         }
 
-        // Professor: verifica se é o professor da turma
         if ($userType === 'professor') {
-            return $this->turma->professor_id === $user->id;
+            return $this->canManage($user);
         }
 
-        // Aluno: verifica se está matriculado na turma
         if ($userType === 'aluno') {
-            $alunos = $this->turma->alunos ?? [];
-            return in_array($user->id, $alunos) || in_array((string)$user->id, $alunos);
+            return $this->atividadeAlunos()
+                ->where('aluno_id', $user->id)
+                ->exists();
+        }
+
+        return false;
+    }
+
+    public function canManage(User $user): bool
+    {
+        $userType = $user->userType->name;
+
+        if (in_array($userType, ['root', 'admin'])) {
+            return true;
+        }
+
+        if ($userType === 'professor') {
+            return $this->professor_id === $user->id
+                || $this->turmaCriada?->professor_id === $user->id;
         }
 
         return false;
@@ -76,22 +99,17 @@ class Atividade extends Model
      */
     public function canEdit(User $user): bool
     {
-        $userType = $user->userType->name;
-
-        if (!$this->turma || $this->turma->status !== 'em andamento') {
+        if (!$this->turmaCriada || $this->turmaCriada->status !== 'em andamento') {
             return false;
         }
 
-        // Admin e Root podem editar
-        if (in_array($userType, ['root', 'admin'])) {
-            return true;
-        }
+        return $this->canManage($user);
+    }
 
-        // Professor: apenas se for o professor da turma
-        if ($userType === 'professor') {
-            return $this->turma->professor_id === $user->id;
-        }
-
-        return false;
+    public function hasEntregas(): bool
+    {
+        return $this->atividadeAlunos()
+            ->where('status', AtividadeAluno::STATUS_ENTREGUE)
+            ->exists();
     }
 }

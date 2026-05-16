@@ -5,29 +5,45 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
+const formatDateTime = (value) => {
+    if (!value) return 'Sem prazo';
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Sem prazo';
+
+    return date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+};
+
+const statusVariant = (status) => {
+    if (status === 'entregue') return 'default';
+    if (status === 'pendente') return 'secondary';
+    return 'outline';
+};
+
 export default function AtividadesIndex({ atividades = [] }) {
     const { props } = usePage();
     const userType = props.user?.type || props.auth?.user?.user_type?.name;
     const canCreate = ['professor', 'admin', 'root'].includes(userType);
+    const isAluno = userType === 'aluno';
 
     return (
         <HubLayout>
             <Head title="Atividades" />
 
             <div className="space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">Atividades</h1>
-                        <p className="text-muted-foreground">
-                            Visualize e gerencie as atividades das suas turmas
+                        <p className="text-sm text-muted-foreground">
+                            {isAluno
+                                ? 'Acompanhe suas atividades, entregas e notas.'
+                                : 'Crie atividades por turma e acompanhe as entregas dos alunos.'}
                         </p>
                     </div>
 
                     {canCreate && (
                         <Link href="/hub/atividades/create">
-                            <Button>
-                                Criar atividade
-                            </Button>
+                            <Button>Criar atividade</Button>
                         </Link>
                     )}
                 </div>
@@ -37,7 +53,7 @@ export default function AtividadesIndex({ atividades = [] }) {
                         <CardTitle>Lista de atividades</CardTitle>
                         <CardDescription>
                             {atividades.length > 0
-                                ? 'Atividades disponíveis no momento'
+                                ? `${atividades.length} atividade(s) encontrada(s)`
                                 : 'Nenhuma atividade encontrada para o seu usuário'}
                         </CardDescription>
                     </CardHeader>
@@ -46,53 +62,64 @@ export default function AtividadesIndex({ atividades = [] }) {
                             <div className="py-12 text-center text-muted-foreground">
                                 <p className="text-lg font-medium">Nada por aqui ainda.</p>
                                 <p className="text-sm">
-                                    Assim que novas atividades forem criadas, elas aparecerão nesta lista.
+                                    Quando uma atividade for criada para sua turma, ela aparecerá nesta lista.
                                 </p>
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {atividades.map((atividade) => (
-                                    <Link
-                                        key={atividade.id}
-                                        href={`/hub/atividades/${atividade.id}`}
-                                        className="block rounded-lg border border-border p-4 transition-smooth hover:bg-muted/60"
-                                    >
-                                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                            <div className="space-y-2">
-                                                <div className="flex items-center gap-3">
-                                                    <h2 className="text-lg font-semibold text-foreground">
-                                                        {atividade.titulo}
-                                                    </h2>
-                                                    {atividade.tipo && (
-                                                        <Badge variant="secondary">
-                                                            {atividade.tipo.nome}
-                                                        </Badge>
+                                {atividades.map((atividade) => {
+                                    const entrega = atividade.minha_entrega;
+
+                                    return (
+                                        <Link
+                                            key={atividade.id}
+                                            href={`/hub/atividades/${atividade.id}`}
+                                            className="block rounded-lg border border-border p-4 transition hover:bg-muted/60"
+                                        >
+                                            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                                <div className="space-y-2">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <h2 className="text-lg font-semibold text-foreground">
+                                                            {atividade.titulo}
+                                                        </h2>
+                                                        {entrega && (
+                                                            <Badge variant={statusVariant(entrega.status)}>
+                                                                {entrega.status}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {atividade.turma_criada?.turma?.nome ?? 'Turma não informada'}
+                                                    </p>
+                                                    {atividade.descricao && (
+                                                        <p className="line-clamp-2 text-sm text-muted-foreground">
+                                                            {atividade.descricao}
+                                                        </p>
                                                     )}
                                                 </div>
-                                                <p className="text-sm text-muted-foreground">
-                                                    {atividade.turma?.turma?.nome ?? 'Turma não informada'}
-                                                </p>
-                                                {atividade.descricao && (
-                                                    <p className="text-sm text-muted-foreground line-clamp-2">
-                                                        {atividade.descricao}
-                                                    </p>
-                                                )}
-                                            </div>
 
-                                            <div className="flex flex-col items-start gap-2 text-sm text-muted-foreground md:items-end">
-                                                <Badge variant={
-                                                    atividade.status === 'ativa' ? 'default' :
-                                                    atividade.status === 'encerrada' ? 'outline' :
-                                                    'secondary'
-                                                }>
-                                                    {atividade.status ?? 'sem status'}
-                                                </Badge>
-                                                <span>Data de entrega: {atividade.data_entrega ? new Date(atividade.data_entrega).toLocaleDateString() : '—'}</span>
-                                                <span>Nota máxima: {atividade.nota_max ?? '—'}</span>
+                                                <div className="flex flex-col items-start gap-2 text-sm text-muted-foreground md:items-end">
+                                                    <span>Prazo: {formatDateTime(atividade.data_entrega)}</span>
+                                                    <span>Nota máxima: {atividade.nota_max ?? '—'}</span>
+                                                    {isAluno ? (
+                                                        <span>
+                                                            Nota final: {entrega?.nota_total ?? '—'}
+                                                        </span>
+                                                    ) : (
+                                                        <div className="flex flex-wrap gap-2 md:justify-end">
+                                                            <Badge variant="outline">
+                                                                {atividade.entregues_count ?? 0} entregue(s)
+                                                            </Badge>
+                                                            <Badge variant="secondary">
+                                                                {atividade.pendentes_count ?? 0} pendente(s)
+                                                            </Badge>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </Link>
-                                ))}
+                                        </Link>
+                                    );
+                                })}
                             </div>
                         )}
                     </CardContent>
@@ -101,4 +128,3 @@ export default function AtividadesIndex({ atividades = [] }) {
         </HubLayout>
     );
 }
-
