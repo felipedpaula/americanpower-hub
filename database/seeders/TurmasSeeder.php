@@ -26,17 +26,23 @@ class TurmasSeeder extends Seeder
         $joao  = DB::table('users')->where('email', 'joao@americanpower.com')->value('id');
         $maria = DB::table('users')->where('email', 'maria@americanpower.com')->value('id');
 
+        $pedro  = DB::table('users')->where('email', 'pedro@aluno.com')->value('id');
+        $ana    = DB::table('users')->where('email', 'ana@aluno.com')->value('id');
+        $lucas  = DB::table('users')->where('email', 'lucas@aluno.com')->value('id');
+        $julia  = DB::table('users')->where('email', 'julia@aluno.com')->value('id');
+
         $turmas = DB::table('turmas')->orderBy('ordem')->pluck('id', 'nome');
 
         // Distribuição: João → 1a, 2a, 3a, advanced | Maria → 1b, 2b, 3b
+        // Cada aluno pertence a apenas uma turma
         $associacoes = [
-            ['turma_id' => $turmas['1a'],       'professor_id' => $joao],
-            ['turma_id' => $turmas['1b'],       'professor_id' => $maria],
-            ['turma_id' => $turmas['2a'],       'professor_id' => $joao],
-            ['turma_id' => $turmas['2b'],       'professor_id' => $maria],
-            ['turma_id' => $turmas['3a'],       'professor_id' => $joao],
-            ['turma_id' => $turmas['3b'],       'professor_id' => $maria],
-            ['turma_id' => $turmas['advanced'], 'professor_id' => $joao],
+            ['turma_id' => $turmas['1a'],       'professor_id' => $joao,  'alunos' => json_encode([$pedro])],
+            ['turma_id' => $turmas['1b'],       'professor_id' => $maria, 'alunos' => json_encode([$ana])],
+            ['turma_id' => $turmas['2a'],       'professor_id' => $joao,  'alunos' => json_encode([$lucas])],
+            ['turma_id' => $turmas['2b'],       'professor_id' => $maria, 'alunos' => json_encode([$julia])],
+            ['turma_id' => $turmas['3a'],       'professor_id' => $joao,  'alunos' => json_encode([])],
+            ['turma_id' => $turmas['3b'],       'professor_id' => $maria, 'alunos' => json_encode([])],
+            ['turma_id' => $turmas['advanced'], 'professor_id' => $joao,  'alunos' => json_encode([])],
         ];
 
         $now = now();

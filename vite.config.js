@@ -21,7 +21,7 @@ export default defineConfig({
         port: 3000,
         hmr: {
             clientPort: 3000,
-            host: 'americanpower-hub',
+            host: 'americanpower',
         },
     },
 });

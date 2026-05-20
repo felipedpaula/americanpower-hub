@@ -309,21 +309,11 @@ export default function AtividadeForm({
                     </Card>
 
                     <Card>
-                        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div>
-                                <CardTitle>Blocos da atividade</CardTitle>
-                                <CardDescription>
-                                    Organize textos, perguntas abertas, lacunas e alternativas na ordem desejada.
-                                </CardDescription>
-                            </div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={addBlock}
-                                disabled={!canEditStructure}
-                            >
-                                Adicionar bloco
-                            </Button>
+                        <CardHeader>
+                            <CardTitle>Blocos da atividade</CardTitle>
+                            <CardDescription>
+                                Organize textos, perguntas abertas, lacunas e alternativas na ordem desejada.
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-5">
                             {errors.blocos && (
@@ -416,6 +406,16 @@ export default function AtividadeForm({
                                     />
                                 </div>
                             ))}
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={addBlock}
+                                disabled={!canEditStructure}
+                                className="w-full"
+                            >
+                                Adicionar bloco
+                            </Button>
                         </CardContent>
                     </Card>
 
