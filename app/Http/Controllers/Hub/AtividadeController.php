@@ -225,21 +225,54 @@ class AtividadeController extends Controller
     public function destroy(Request $request, $id)
     {
         $user = $request->user();
-        $atividade = Atividade::findOrFail($id);
+        $atividade = Atividade::with(['atividadeAlunos', 'blocos'])->findOrFail($id);
 
-        if (!$atividade->canEdit($user)) {
+        if (!$atividade->canManage($user)) {
             abort(403, 'Você não tem permissão para excluir esta atividade.');
         }
 
-        if ($atividade->hasEntregas()) {
-            return back()->withErrors(['error' => 'Não é possível excluir uma atividade que já possui entregas.']);
-        }
+        DB::transaction(function () use ($atividade) {
+            AtividadeResposta::whereIn(
+                'atividade_aluno_id',
+                $atividade->atividadeAlunos()->pluck('id')
+            )->delete();
 
-        $atividade->delete();
+            $atividade->atividadeAlunos()->delete();
+            $atividade->blocos()->delete();
+            $atividade->delete();
+        });
 
         return redirect()
             ->route('hub.atividades.index')
             ->with('success', 'Atividade excluída com sucesso.');
+    }
+
+    public function destroyBloco(Request $request, $id, $blocoId)
+    {
+        $user = $request->user();
+        $atividade = Atividade::with(['blocos'])->findOrFail($id);
+
+        if (!$atividade->canManage($user)) {
+            abort(403, 'Você não tem permissão para excluir blocos desta atividade.');
+        }
+
+        if ($atividade->hasEntregas()) {
+            return back()->withErrors(['error' => 'Não é possível excluir blocos de uma atividade que já possui entregas.']);
+        }
+
+        $bloco = $atividade->blocos()->findOrFail($blocoId);
+
+        DB::transaction(function () use ($bloco, $atividade) {
+            AtividadeResposta::where('atividade_bloco_id', $bloco->id)->delete();
+            $bloco->delete();
+
+            // Reordena os blocos restantes
+            $atividade->blocos()->orderBy('ordem')->get()->each(function ($b, $index) {
+                $b->update(['ordem' => $index + 1]);
+            });
+        });
+
+        return back()->with('success', 'Bloco excluído com sucesso.');
     }
 
     public function submeter(Request $request, $id)
@@ -317,6 +350,36 @@ class AtividadeController extends Controller
         return back()->with('success', 'Nota atualizada com sucesso.');
     }
 
+    public function showEntrega(Request $request, $id, $alunoId)
+    {
+        $user = $request->user();
+        $atividade = Atividade::with([
+            'turmaCriada.turma',
+            'turmaCriada.professor',
+            'professor',
+            'blocos',
+        ])->findOrFail($id);
+
+        if (!$atividade->canManage($user)) {
+            abort(403, 'Você não tem permissão para visualizar esta entrega.');
+        }
+
+        $atividadeAluno = AtividadeAluno::with(['aluno', 'respostas'])
+            ->where('atividade_id', $atividade->id)
+            ->where('aluno_id', $alunoId)
+            ->firstOrFail();
+
+        $respostas = $atividadeAluno->respostas->mapWithKeys(
+            fn (AtividadeResposta $resposta) => [$resposta->atividade_bloco_id => $resposta->resposta]
+        );
+
+        return Inertia::render('Hub/Atividades/ShowEntrega', [
+            'atividade' => $this->serializeAtividadeDetalhe($atividade, $user),
+            'atividadeAluno' => $this->serializeAtividadeAluno($atividadeAluno),
+            'respostas' => $respostas,
+        ]);
+    }
+
     private function validateAtividade(Request $request, bool $requireStructure): array
     {
         $rules = [
@@ -363,7 +426,7 @@ class AtividadeController extends Controller
 
     private function normalizeConteudoBloco(?string $tipo, array $conteudo, string $fieldPrefix): array
     {
-        if (in_array($tipo, [AtividadeBloco::TIPO_TRADUCAO, AtividadeBloco::TIPO_COMPLETE])) {
+        if ($tipo === AtividadeBloco::TIPO_TRADUCAO) {
             $texto = trim((string) ($conteudo['texto'] ?? ''));
 
             if ($texto === '') {
@@ -373,6 +436,22 @@ class AtividadeController extends Controller
             }
 
             return ['texto' => $texto];
+        }
+
+        if ($tipo === AtividadeBloco::TIPO_COMPLETE) {
+            $textos = collect($conteudo['textos'] ?? [])
+                ->map(fn ($t) => trim((string) $t))
+                ->filter()
+                ->values()
+                ->all();
+
+            if (empty($textos)) {
+                throw ValidationException::withMessages([
+                    "{$fieldPrefix}.textos" => 'Informe pelo menos um texto com lacuna.',
+                ]);
+            }
+
+            return ['textos' => $textos];
         }
 
         if ($tipo === AtividadeBloco::TIPO_PERGUNTA_RESPOSTA) {
@@ -458,7 +537,7 @@ class AtividadeController extends Controller
 
     private function normalizeRespostaBloco(AtividadeBloco $bloco, array $payload, string $fieldPrefix): array
     {
-        if (in_array($bloco->tipo, [AtividadeBloco::TIPO_TRADUCAO, AtividadeBloco::TIPO_COMPLETE])) {
+        if ($bloco->tipo === AtividadeBloco::TIPO_TRADUCAO) {
             $texto = trim((string) ($payload['texto'] ?? ''));
 
             if ($texto === '') {
@@ -468,6 +547,28 @@ class AtividadeController extends Controller
             }
 
             return ['texto' => $texto];
+        }
+
+        if ($bloco->tipo === AtividadeBloco::TIPO_COMPLETE) {
+            $respostas = [];
+            $textos = $bloco->conteudo['textos'] ?? [];
+
+            foreach ($textos as $index => $texto) {
+                $resposta = trim((string) ($payload['respostas'][$index]['resposta'] ?? ''));
+
+                if ($resposta === '') {
+                    throw ValidationException::withMessages([
+                        "{$fieldPrefix}.respostas.{$index}.resposta" => 'Complete todas as lacunas.',
+                    ]);
+                }
+
+                $respostas[] = [
+                    'texto_index' => $index,
+                    'resposta' => $resposta,
+                ];
+            }
+
+            return ['respostas' => $respostas];
         }
 
         if ($bloco->tipo === AtividadeBloco::TIPO_PERGUNTA_RESPOSTA) {
@@ -621,6 +722,7 @@ class AtividadeController extends Controller
             'pendentes_count' => $atividade->pendentes_count ?? 0,
             'entregues_count' => $atividade->entregues_count ?? 0,
             'minha_entrega' => $minhaEntrega ? $this->serializeAtividadeAluno($minhaEntrega) : null,
+            'pode_excluir' => $atividade->canManage($user),
         ];
     }
 
@@ -646,6 +748,7 @@ class AtividadeController extends Controller
             ])->values(),
             'pode_editar' => $atividade->canEdit($user),
             'pode_editar_estrutura' => $atividade->canEdit($user) && !$atividade->hasEntregas(),
+            'pode_excluir' => $atividade->canManage($user),
         ];
     }
 

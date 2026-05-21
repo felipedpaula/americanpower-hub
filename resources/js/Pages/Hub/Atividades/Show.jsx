@@ -51,6 +51,15 @@ const defaultResposta = (bloco) => {
         };
     }
 
+    if (bloco.tipo === 'complete') {
+        return {
+            respostas: (bloco.conteudo?.textos ?? []).map((_, index) => ({
+                texto_index: index,
+                resposta: '',
+            })),
+        };
+    }
+
     return { texto: '' };
 };
 
@@ -80,13 +89,29 @@ export default function ShowAtividade({
         respostas: buildInitialRespostas(blocos, respostasAluno),
     });
 
-    const [notas, setNotas] = useState(() => (
-        alunos.reduce((acc, alunoEntrega) => {
-            acc[alunoEntrega.aluno_id] = alunoEntrega.nota_total ?? '';
-            return acc;
-        }, {})
-    ));
-    const [notaProcessing, setNotaProcessing] = useState(null);
+    const [deletingAtividade, setDeletingAtividade] = useState(false);
+    const [deletingBlocoId, setDeletingBlocoId] = useState(null);
+
+    const handleDeleteAtividade = () => {
+        if (!window.confirm(`Tem certeza que deseja excluir a atividade "${atividade.titulo}"? Todas as respostas e dados dos alunos serão apagados permanentemente.`)) {
+            return;
+        }
+        setDeletingAtividade(true);
+        router.delete(`/hub/atividades/${atividade.id}`, {
+            onFinish: () => setDeletingAtividade(false),
+        });
+    };
+
+    const handleDeleteBloco = (bloco) => {
+        if (!window.confirm(`Tem certeza que deseja excluir o Bloco ${bloco.ordem}${bloco.titulo ? ` "${bloco.titulo}"` : ''}?`)) {
+            return;
+        }
+        setDeletingBlocoId(bloco.id);
+        router.delete(`/hub/atividades/${atividade.id}/blocos/${bloco.id}`, {
+            preserveScroll: true,
+            onFinish: () => setDeletingBlocoId(null),
+        });
+    };
 
     if (!atividade) {
         return (
@@ -118,18 +143,6 @@ export default function ShowAtividade({
         });
     };
 
-    const submitNota = (alunoId) => {
-        setNotaProcessing(alunoId);
-        router.put(
-            `/hub/atividades/${atividade.id}/alunos/${alunoId}/nota`,
-            { nota_total: notas[alunoId] === '' ? null : notas[alunoId] },
-            {
-                preserveScroll: true,
-                onFinish: () => setNotaProcessing(null),
-            }
-        );
-    };
-
     const delivered = atividadeAluno?.status === 'entregue';
 
     return (
@@ -153,6 +166,16 @@ export default function ShowAtividade({
                             <Link href={`/hub/atividades/${atividade.id}/edit`}>
                                 <Button type="button">Editar atividade</Button>
                             </Link>
+                        )}
+                        {atividade.pode_excluir && (
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                onClick={handleDeleteAtividade}
+                                disabled={deletingAtividade}
+                            >
+                                {deletingAtividade ? 'Excluindo...' : 'Excluir atividade'}
+                            </Button>
                         )}
                     </div>
                 </div>
@@ -231,7 +254,11 @@ export default function ShowAtividade({
                         ) : isAluno ? (
                             <form onSubmit={submitRespostas} className="space-y-5">
                                 {blocos.map((bloco) => (
-                                    <AtividadeBlocoCard key={bloco.id} bloco={bloco}>
+                                    <AtividadeBlocoCard
+                                        key={bloco.id}
+                                        bloco={bloco}
+                                        hideConteudo={['pergunta_resposta', 'alternativa', 'complete'].includes(bloco.tipo)}
+                                    >
                                         <RespostaEditor
                                             bloco={bloco}
                                             resposta={respostaForm.data.respostas[bloco.id] ?? defaultResposta(bloco)}
@@ -253,7 +280,13 @@ export default function ShowAtividade({
                         ) : (
                             <div className="space-y-5">
                                 {blocos.map((bloco) => (
-                                    <AtividadeBlocoCard key={bloco.id} bloco={bloco} />
+                                    <AtividadeBlocoCard
+                                        key={bloco.id}
+                                        bloco={bloco}
+                                        hideConteudo={false}
+                                        onDelete={atividade.pode_editar_estrutura ? () => handleDeleteBloco(bloco) : undefined}
+                                        deleting={deletingBlocoId === bloco.id}
+                                    />
                                 ))}
                             </div>
                         )}
@@ -263,9 +296,9 @@ export default function ShowAtividade({
                 {canManage && (
                     <Card>
                         <CardHeader>
-                            <CardTitle>Entregas e notas</CardTitle>
+                            <CardTitle>Entregas</CardTitle>
                             <CardDescription>
-                                Lance a nota final manualmente após a entrega do aluno.
+                                Clique em “Ver entrega” para revisar as respostas e atribuir a nota.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -276,7 +309,7 @@ export default function ShowAtividade({
                                     {alunos.map((alunoEntrega) => (
                                         <div
                                             key={alunoEntrega.id}
-                                            className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-[1fr_auto] md:items-center"
+                                            className="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
                                         >
                                             <div className="space-y-1">
                                                 <div className="flex flex-wrap items-center gap-2">
@@ -286,37 +319,26 @@ export default function ShowAtividade({
                                                     <Badge variant={statusVariant(alunoEntrega.status)}>
                                                         {alunoEntrega.status}
                                                     </Badge>
+                                                    {alunoEntrega.nota_total !== null && alunoEntrega.nota_total !== undefined && (
+                                                        <span className="text-sm text-muted-foreground">
+                                                            Nota: <span className="font-semibold text-foreground">{alunoEntrega.nota_total}</span>
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <p className="text-sm text-muted-foreground">
-                                                    Entregue em: {formatDateTime(alunoEntrega.data_submissao)}
+                                                    {alunoEntrega.status === 'entregue'
+                                                        ? `Entregue em: ${formatDateTime(alunoEntrega.data_submissao)}`
+                                                        : 'Aguardando entrega'}
                                                 </p>
                                             </div>
 
-                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                                                <div className="w-full sm:w-36">
-                                                    <Label htmlFor={`nota-${alunoEntrega.aluno_id}`}>Nota final</Label>
-                                                    <Input
-                                                        id={`nota-${alunoEntrega.aluno_id}`}
-                                                        type="number"
-                                                        min="0"
-                                                        max={atividade.nota_max}
-                                                        step="0.01"
-                                                        value={notas[alunoEntrega.aluno_id] ?? ''}
-                                                        onChange={(event) => setNotas({
-                                                            ...notas,
-                                                            [alunoEntrega.aluno_id]: event.target.value,
-                                                        })}
-                                                        disabled={alunoEntrega.status !== 'entregue'}
-                                                    />
-                                                </div>
-                                                <Button
-                                                    type="button"
-                                                    onClick={() => submitNota(alunoEntrega.aluno_id)}
-                                                    disabled={alunoEntrega.status !== 'entregue' || notaProcessing === alunoEntrega.aluno_id}
-                                                >
-                                                    {notaProcessing === alunoEntrega.aluno_id ? 'Salvando...' : 'Salvar nota'}
-                                                </Button>
-                                            </div>
+                                            {alunoEntrega.status === 'entregue' && (
+                                                <Link href={`/hub/atividades/${atividade.id}/alunos/${alunoEntrega.aluno_id}`}>
+                                                    <Button type="button" variant="outline" size="sm">
+                                                        Ver entrega
+                                                    </Button>
+                                                </Link>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -364,7 +386,7 @@ function StatCard({ label, value }) {
     );
 }
 
-function AtividadeBlocoCard({ bloco, children }) {
+function AtividadeBlocoCard({ bloco, children, onDelete, deleting, hideConteudo = false }) {
     return (
         <div className="rounded-lg border border-border p-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -373,14 +395,26 @@ function AtividadeBlocoCard({ bloco, children }) {
                 {bloco.titulo && (
                     <span className="text-sm font-medium text-foreground">{bloco.titulo}</span>
                 )}
+                {onDelete && (
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        disabled={deleting}
+                        className="ml-auto text-xs text-destructive hover:underline disabled:opacity-50"
+                    >
+                        {deleting ? 'Excluindo...' : 'Excluir bloco'}
+                    </button>
+                )}
             </div>
 
-            <div className="mt-4">
-                <BlocoConteudo bloco={bloco} />
-            </div>
+            {!hideConteudo && (
+                <div className="mt-4">
+                    <BlocoConteudo bloco={bloco} />
+                </div>
+            )}
 
             {children && (
-                <div className="mt-4 border-t border-border pt-4">
+                <div className={`${hideConteudo ? 'mt-4' : 'mt-4 border-t border-border pt-4'}`}>
                     {children}
                 </div>
             )}
@@ -413,6 +447,30 @@ function BlocoConteudo({ bloco }) {
                     </div>
                 ))}
             </div>
+        );
+    }
+
+    if (bloco.tipo === 'complete') {
+        return (
+            <ol className="list-decimal space-y-3 pl-5 text-sm text-foreground">
+                {(bloco.conteudo?.textos ?? []).map((texto, index) => {
+                    const partes = texto.split('__');
+                    return (
+                        <li key={index} className="leading-relaxed">
+                            <span className="inline-flex flex-wrap items-baseline gap-x-1">
+                                {partes.map((parte, i) => (
+                                    <span key={i} className="inline-flex items-baseline gap-x-1">
+                                        <span>{parte}</span>
+                                        {i < partes.length - 1 && (
+                                            <span className="inline-block min-w-[80px] border-b-2 border-foreground/50" />
+                                        )}
+                                    </span>
+                                ))}
+                            </span>
+                        </li>
+                    );
+                })}
+            </ol>
         );
     }
 
@@ -503,6 +561,52 @@ function RespostaEditor({ bloco, resposta, errors, disabled, onChange }) {
         );
     }
 
+    if (bloco.tipo === 'complete') {
+        const respostas = resposta.respostas ?? defaultResposta(bloco).respostas;
+
+        const updateResposta = (index, value) => {
+            onChange({
+                respostas: respostas.map((item, currentIndex) => (
+                    currentIndex === index ? { ...item, resposta: value } : item
+                )),
+            });
+        };
+
+        return (
+            <ol className="list-decimal space-y-4 pl-5">
+                {(bloco.conteudo?.textos ?? []).map((texto, index) => {
+                    const partes = texto.split('__');
+                    const valor = respostas[index]?.resposta ?? '';
+                    const erro = errors[`respostas.${bloco.id}.respostas.${index}.resposta`];
+
+                    return (
+                        <li key={index} className="leading-loose">
+                            <span className="inline-flex flex-wrap items-baseline gap-x-1 text-sm text-foreground">
+                                {partes.map((parte, i) => (
+                                    <span key={i} className="inline-flex items-baseline gap-x-1">
+                                        <span>{parte}</span>
+                                        {i < partes.length - 1 && (
+                                            <input
+                                                type="text"
+                                                value={i === 0 ? valor : ''}
+                                                onChange={(event) => i === 0 && updateResposta(index, event.target.value)}
+                                                placeholder="..."
+                                                className="inline-block w-28 border-0 border-b-2 border-primary bg-transparent px-1 text-center text-sm text-foreground focus:outline-none focus:border-ring placeholder:text-muted-foreground/50"
+                                            />
+                                        )}
+                                    </span>
+                                ))}
+                            </span>
+                            {erro && (
+                                <p className="mt-1 text-sm text-destructive">{erro}</p>
+                            )}
+                        </li>
+                    );
+                })}
+            </ol>
+        );
+    }
+
     return (
         <div>
             <Label htmlFor={`resposta-${bloco.id}`}>Sua resposta</Label>
@@ -511,7 +615,7 @@ function RespostaEditor({ bloco, resposta, errors, disabled, onChange }) {
                 value={resposta.texto ?? ''}
                 onChange={(event) => onChange({ texto: event.target.value })}
                 className={`${inputClass} min-h-[110px] resize-y`}
-                placeholder={bloco.tipo === 'complete' ? 'Digite o trecho que completa a lacuna' : 'Digite sua tradução'}
+                placeholder="Digite sua tradução"
             />
             {errors[`respostas.${bloco.id}.texto`] && (
                 <p className="mt-2 text-sm text-destructive">{errors[`respostas.${bloco.id}.texto`]}</p>
@@ -553,6 +657,35 @@ function RespostaReadOnly({ bloco, resposta }) {
                     );
                 })}
             </div>
+        );
+    }
+
+    if (bloco.tipo === 'complete') {
+        return (
+            <ol className="list-decimal space-y-3 pl-5">
+                {(bloco.conteudo?.textos ?? []).map((texto, index) => {
+                    const item = resposta?.respostas?.[index];
+                    const partes = texto.split('__');
+                    const valor = item?.resposta || null;
+
+                    return (
+                        <li key={index} className="leading-loose">
+                            <span className="inline-flex flex-wrap items-baseline gap-x-1 text-sm text-foreground">
+                                {partes.map((parte, i) => (
+                                    <span key={i} className="inline-flex items-baseline gap-x-1">
+                                        <span>{parte}</span>
+                                        {i < partes.length - 1 && (
+                                            <span className="inline-block min-w-[64px] border-b-2 border-foreground/50 px-1 text-center text-sm font-semibold text-foreground">
+                                                {i === 0 ? (valor ?? '—') : '—'}
+                                            </span>
+                                        )}
+                                    </span>
+                                ))}
+                            </span>
+                        </li>
+                    );
+                })}
+            </ol>
         );
     }
 

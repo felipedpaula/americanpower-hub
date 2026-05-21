@@ -32,6 +32,10 @@ const defaultContent = (tipo) => {
         };
     }
 
+    if (tipo === 'complete') {
+        return { textos: [''] };
+    }
+
     return { texto: '' };
 };
 
@@ -75,6 +79,14 @@ const normalizeContent = (tipo, content) => {
             : [{ pergunta: '', opcoes: ['', ''] }];
 
         return { perguntas };
+    }
+
+    if (tipo === 'complete') {
+        const textos = Array.isArray(content.textos) && content.textos.length > 0
+            ? content.textos
+            : [''];
+
+        return { textos };
     }
 
     return { texto: content.texto ?? '' };
@@ -269,8 +281,22 @@ export default function AtividadeForm({
                                     <Input
                                         id="data_entrega"
                                         type="datetime-local"
+                                        max="9999-12-31T23:59"
                                         value={data.data_entrega}
-                                        onChange={(event) => setData('data_entrega', event.target.value)}
+                                        onChange={(event) => {
+                                            let value = event.target.value;
+                                            if (value) {
+                                                // formato: YYYY-MM-DDTHH:mm
+                                                const [datePart, timePart] = value.split('T');
+                                                const [year, ...rest] = (datePart ?? '').split('-');
+                                                if (year.length > 4) {
+                                                    const truncated = year.slice(0, 4) + (rest.length ? '-' + rest.join('-') : '');
+                                                    value = timePart !== undefined ? truncated + 'T' + timePart : truncated;
+                                                    event.target.value = value;
+                                                }
+                                            }
+                                            setData('data_entrega', value);
+                                        }}
                                     />
                                     {errors.data_entrega && (
                                         <p className="mt-2 text-sm text-destructive">{errors.data_entrega}</p>
@@ -594,16 +620,95 @@ function BlockContentEditor({ block, index, errors, disabled, onChange }) {
         );
     }
 
+    if (block.tipo === 'complete') {
+        const textos = block.conteudo.textos ?? [''];
+
+        const updateTexto = (textoIndex, value) => {
+            onChange({
+                textos: textos.map((texto, currentIndex) => (
+                    currentIndex === textoIndex ? value : texto
+                )),
+            });
+        };
+
+        const addTexto = () => onChange({ textos: [...textos, ''] });
+        const removeTexto = (textoIndex) => {
+            if (textos.length === 1) return;
+            onChange({ textos: textos.filter((_, currentIndex) => currentIndex !== textoIndex) });
+        };
+
+        return (
+            <div className="mt-4 space-y-4">
+                <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-700">
+                    Use <code className="font-mono font-bold">__</code> (dois underlines) para marcar a lacuna em cada frase.
+                    {' '}Ex: <em>She __ to school every day.</em>
+                </div>
+                <Label>Itens com lacuna</Label>
+                {textos.map((texto, textoIndex) => {
+                    const partes = texto.split('__');
+                    const temLacuna = partes.length > 1;
+
+                    return (
+                        <div key={textoIndex} className="space-y-2 rounded-md border border-border p-3">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium text-muted-foreground">Item {textoIndex + 1}</span>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => removeTexto(textoIndex)}
+                                    disabled={disabled || textos.length === 1}
+                                >
+                                    Remover
+                                </Button>
+                            </div>
+                            <Input
+                                value={texto}
+                                onChange={(event) => updateTexto(textoIndex, event.target.value)}
+                                placeholder={`Ex: She __ to school every day.`}
+                                disabled={disabled}
+                            />
+                            {temLacuna ? (
+                                <div className="flex flex-wrap items-baseline gap-x-1 rounded bg-muted/60 px-2 py-1 text-sm text-foreground">
+                                    <span className="text-xs text-muted-foreground mr-1">Preview:</span>
+                                    {partes.map((parte, i) => (
+                                        <span key={i} className="inline-flex items-baseline gap-x-1">
+                                            <span>{parte}</span>
+                                            {i < partes.length - 1 && (
+                                                <span className="inline-block min-w-[64px] border-b-2 border-foreground/60 text-center text-xs text-muted-foreground">
+                                                    lacuna
+                                                </span>
+                                            )}
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : texto.trim() !== '' && (
+                                <p className="text-xs text-amber-600">⚠ Nenhuma lacuna encontrada. Adicione __ na frase.</p>
+                            )}
+                            {errors[`blocos.${index}.conteudo.textos.${textoIndex}`] && (
+                                <p className="text-sm text-destructive">{errors[`blocos.${index}.conteudo.textos.${textoIndex}`]}</p>
+                            )}
+                        </div>
+                    );
+                })}
+                <Button type="button" variant="outline" onClick={addTexto} disabled={disabled}>
+                    Adicionar item
+                </Button>
+                {errors[`blocos.${index}.conteudo.textos`] && (
+                    <p className="text-sm text-destructive">{errors[`blocos.${index}.conteudo.textos`]}</p>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="mt-4">
-            <Label htmlFor={`texto-${index}`}>
-                {block.tipo === 'complete' ? 'Texto com lacunas' : 'Texto para tradução'}
-            </Label>
+            <Label htmlFor={`texto-${index}`}>Texto para tradução</Label>
             <textarea
                 id={`texto-${index}`}
                 value={block.conteudo.texto ?? ''}
                 onChange={(event) => onChange({ texto: event.target.value })}
-                placeholder={block.tipo === 'complete' ? 'Ex: I ____ English every day.' : 'Ex: Eu gosto de estudar inglês.'}
+                placeholder="Ex: Eu gosto de estudar inglês."
                 className={`${inputClass} min-h-[120px] resize-y`}
                 disabled={disabled}
             />

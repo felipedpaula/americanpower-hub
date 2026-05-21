@@ -132,7 +132,9 @@ Route::prefix('hub')->name('hub.')->group(function () {
                 Route::get('/{id}/edit', [AtividadeController::class, 'edit'])->name('edit');
                 Route::put('/{id}', [AtividadeController::class, 'update'])->name('update');
                 Route::delete('/{id}', [AtividadeController::class, 'destroy'])->name('destroy');
+                Route::delete('/{id}/blocos/{blocoId}', [AtividadeController::class, 'destroyBloco'])->name('blocos.destroy');
                 Route::put('/{id}/alunos/{alunoId}/nota', [AtividadeController::class, 'atualizarNota'])->name('alunos.nota');
+                Route::get('/{id}/alunos/{alunoId}', [AtividadeController::class, 'showEntrega'])->name('alunos.show');
             });
 
             // Rotas gerais (precisam estar depois de rotas específicas)
